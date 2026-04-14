@@ -25,6 +25,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
   const hazardOccupied = new Set<number>();
   const noGroundColumns = new Set<number>();
   const isLavaWorld = worldIndex === 0;
+  const isBeachWorld = worldIndex === 1;
 
   for (let x = 0; x < LEVEL_WIDTH; x++) {
     const sectionIndex = Math.floor(x / checkpointSpacing);
@@ -50,7 +51,8 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
 
     const gapChance = 0.08 + difficulty * 0.12;
-    const isGap = rand() < gapChance && x % 3 === 0;
+    const gapRoll = rand();
+    const isGap = !isBeachWorld && gapRoll < gapChance && x % 3 === 0;
 
     if (isGap) {
       const gapWidth = rand() < 0.5 ? 2 : 3;
