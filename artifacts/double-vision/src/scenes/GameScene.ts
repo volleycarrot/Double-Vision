@@ -359,47 +359,102 @@ export class GameScene extends Phaser.Scene {
     const playerBounds = this.player.getBounds();
     this.waveZones.forEach((w) => {
       w.timer += delta;
-      const sway = Math.sin(w.timer * 0.003) * 10;
+      const sweepCycle = (w.timer * 0.001) % 1;
+      const sway = Math.sin(w.timer * 0.003) * 14;
 
       w.gfx.clear();
-      const waveWidth = TILE * 2;
-      const waveHeight = TILE * 2;
+      const waveW = TILE * 3;
+      const waveH = TILE * 3;
       const cx = w.baseX + sway;
       const cy = w.baseY;
-      const left = cx - waveWidth / 2;
-      const top = cy - waveHeight / 2;
+      const left = cx - waveW / 2;
+      const top = cy - waveH / 2;
+      const bottom = top + waveH;
+      const segments = 24;
 
-      w.gfx.fillStyle(w.color, w.alpha);
+      w.gfx.fillStyle(0x005f8f, 0.55);
       w.gfx.beginPath();
-      w.gfx.moveTo(left, top + waveHeight);
-      const segments = 20;
+      w.gfx.moveTo(left, bottom);
       for (let i = 0; i <= segments; i++) {
         const t = i / segments;
-        const sx = left + t * waveWidth;
-        const amp = 6 + Math.sin(w.timer * 0.004 + t * Math.PI * 2) * 3;
-        const sy = top + Math.sin(w.timer * 0.005 + t * Math.PI * 3) * amp;
+        const sx = left + t * waveW;
+        const baseAmp = 10 + Math.sin(t * Math.PI) * 8;
+        const sy = top + waveH * 0.3 + Math.sin(w.timer * 0.004 + t * Math.PI * 2) * baseAmp;
         w.gfx.lineTo(sx, sy);
       }
-      w.gfx.lineTo(left + waveWidth, top + waveHeight);
+      w.gfx.lineTo(left + waveW, bottom);
       w.gfx.closePath();
       w.gfx.fillPath();
 
-      w.gfx.lineStyle(2, w.color, w.alpha + 0.2);
+      w.gfx.fillStyle(0x0088cc, 0.7);
       w.gfx.beginPath();
-      w.gfx.moveTo(left, top + waveHeight * 0.3);
+      w.gfx.moveTo(left, bottom);
       for (let i = 0; i <= segments; i++) {
         const t = i / segments;
-        const sx = left + t * waveWidth;
-        const sy = top + waveHeight * 0.3 + Math.sin(w.timer * 0.006 + t * Math.PI * 2.5) * 5;
+        const sx = left + t * waveW;
+        const curlFactor = Math.pow(Math.sin(t * Math.PI), 2);
+        const crestH = 14 * curlFactor;
+        const sy = top + waveH * 0.35
+          + Math.sin(w.timer * 0.005 + t * Math.PI * 2.5) * (6 + crestH)
+          - crestH * Math.sin(w.timer * 0.003);
+        w.gfx.lineTo(sx, sy);
+      }
+      w.gfx.lineTo(left + waveW, bottom);
+      w.gfx.closePath();
+      w.gfx.fillPath();
+
+      w.gfx.fillStyle(0x00bbff, 0.8);
+      w.gfx.beginPath();
+      const crestStart = 0.2;
+      const crestEnd = 0.7;
+      const crestBaseY = top + waveH * 0.28;
+      w.gfx.moveTo(left + crestStart * waveW, crestBaseY + 10);
+      for (let i = 0; i <= 16; i++) {
+        const t = crestStart + (i / 16) * (crestEnd - crestStart);
+        const sx = left + t * waveW;
+        const curl = Math.sin((t - crestStart) / (crestEnd - crestStart) * Math.PI);
+        const sy = crestBaseY - curl * 16 * Math.abs(Math.sin(w.timer * 0.004))
+          + Math.sin(w.timer * 0.007 + t * 8) * 2;
+        w.gfx.lineTo(sx, sy);
+      }
+      for (let i = 16; i >= 0; i--) {
+        const t = crestStart + (i / 16) * (crestEnd - crestStart);
+        const sx = left + t * waveW;
+        const curl = Math.sin((t - crestStart) / (crestEnd - crestStart) * Math.PI);
+        const sy = crestBaseY + 4 - curl * 6;
+        w.gfx.lineTo(sx, sy);
+      }
+      w.gfx.closePath();
+      w.gfx.fillPath();
+
+      w.gfx.fillStyle(0xffffff, 0.6);
+      for (let i = 0; i < 5; i++) {
+        const ft = crestStart + 0.05 + (i / 5) * (crestEnd - crestStart - 0.1);
+        const fx = left + ft * waveW;
+        const foamY = crestBaseY - Math.sin((ft - crestStart) / (crestEnd - crestStart) * Math.PI) * 10
+          + Math.sin(w.timer * 0.008 + i * 2) * 3;
+        const foamSize = 2 + Math.sin(w.timer * 0.006 + i) * 1.5;
+        w.gfx.fillCircle(fx, foamY, foamSize);
+      }
+
+      w.gfx.lineStyle(1.5, 0xffffff, 0.35);
+      w.gfx.beginPath();
+      w.gfx.moveTo(left + waveW * 0.1, top + waveH * 0.55);
+      for (let i = 0; i <= 12; i++) {
+        const t = i / 12;
+        const sx = left + waveW * 0.1 + t * waveW * 0.8;
+        const sy = top + waveH * 0.55 + Math.sin(w.timer * 0.006 + t * Math.PI * 3) * 4;
         w.gfx.lineTo(sx, sy);
       }
       w.gfx.strokePath();
 
-      w.hitRect.x = cx - waveWidth / 2;
-      w.hitRect.y = cy - waveHeight / 2;
+      w.hitRect.x = cx - waveW / 2;
+      w.hitRect.y = cy - waveH / 2;
+      w.hitRect.width = waveW;
+      w.hitRect.height = waveH;
 
       if (Phaser.Geom.Rectangle.Overlaps(playerBounds, w.hitRect)) {
-        this.player.body.setVelocityX(this.player.body.velocity.x + PHYSICS.WAVE_SPEED * 0.45);
+        this.player.body.setVelocityX(this.player.body.velocity.x + PHYSICS.WAVE_SPEED * 0.8);
       }
     });
   }
