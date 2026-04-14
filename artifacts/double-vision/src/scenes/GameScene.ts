@@ -558,6 +558,7 @@ export class GameScene extends Phaser.Scene {
     if (this.grabbedVine) {
       if (Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
         const v = this.grabbedVine;
+        v.pivot.setVisible(true);
         const swingAngle = Math.sin(v.angle) * (Math.PI / 2);
         const angularVel = Math.cos(v.angle) * 0.0025 * (Math.PI / 2);
         const launchVelX = angularVel * Math.cos(swingAngle) * v.ropeLen * 120;
@@ -588,8 +589,6 @@ export class GameScene extends Phaser.Scene {
         this.vineGrabGfx.moveTo(v.baseX, v.anchorY);
         this.vineGrabGfx.lineTo(this.player.x, this.player.y);
         this.vineGrabGfx.strokePath();
-        this.vineGrabGfx.fillStyle(0xffd700, 1);
-        this.vineGrabGfx.fillCircle(this.player.x, this.player.y - 16, 5);
       }
     } else if (this.quicksandContactTimer > 0) {
       this.player.body.setVelocityX(0);
@@ -1092,6 +1091,7 @@ export class GameScene extends Phaser.Scene {
         const grabBounds = new Phaser.Geom.Rectangle(endX - TILE / 2, endY - TILE / 2, TILE, TILE);
         if (Phaser.Geom.Rectangle.Overlaps(playerBounds, grabBounds)) {
           this.grabbedVine = v;
+          v.pivot.setVisible(false);
           this.player.body.setVelocity(0, 0);
           this.player.body.setAllowGravity(false);
           this.player.setPosition(endX, endY);
@@ -1150,7 +1150,9 @@ export class GameScene extends Phaser.Scene {
     this.deaths++;
     this.deathText.setText(`Deaths: ${this.deaths}`);
 
+    let deathVine: typeof this.grabbedVine = null;
     if (this.grabbedVine) {
+      deathVine = this.grabbedVine;
       this.grabbedVine = null;
       this.player.body.setAllowGravity(true);
       if (this.vineGrabGfx) {
@@ -1163,6 +1165,9 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.flash(200, 255, 0, 0);
 
     this.time.delayedCall(400, () => {
+      if (deathVine) {
+        deathVine.pivot.setVisible(true);
+      }
       this.player.x = this.lastCheckpointX;
       this.player.y = this.lastCheckpointY;
       this.player.body.setVelocity(0, 0);
