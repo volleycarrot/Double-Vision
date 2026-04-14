@@ -53,10 +53,33 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     const isGap = rand() < gapChance && x % 3 === 0;
 
     if (isGap) {
-      noGroundColumns.add(x);
+      const gapWidth = rand() < 0.5 ? 2 : 3;
+      let canPlaceGap = true;
+      for (let g = 0; g < gapWidth; g++) {
+        const col = x + g;
+        if (col >= LEVEL_WIDTH - 5 || noGroundColumns.has(col)) {
+          canPlaceGap = false;
+          break;
+        }
+        const colSection = Math.floor(col / checkpointSpacing);
+        const isNearCheckpoint = col > 0 && Math.abs(col - colSection * checkpointSpacing) <= 2;
+        const isNextCheckpoint = colSection < CHECKPOINT_COUNT && Math.abs(col - (colSection + 1) * checkpointSpacing) <= 2;
+        if (isNearCheckpoint || isNextCheckpoint) {
+          canPlaceGap = false;
+          break;
+        }
+      }
+      if (canPlaceGap) {
+        for (let g = 0; g < gapWidth; g++) {
+          noGroundColumns.add(x + g);
+        }
+        for (let g = 1; g < gapWidth; g++) {
+          hazardOccupied.add(x + g);
+        }
+      }
     }
 
-    if (!isGap) {
+    if (!noGroundColumns.has(x)) {
       tiles.push({ x, y: groundLevel, type: "ground" });
       tiles.push({ x, y: groundLevel + 1, type: "ground" });
 
