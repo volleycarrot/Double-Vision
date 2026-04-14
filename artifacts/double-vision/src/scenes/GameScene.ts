@@ -26,7 +26,8 @@ export class GameScene extends Phaser.Scene {
   private deathText!: Phaser.GameObjects.Text;
   private worldText!: Phaser.GameObjects.Text;
   private waterTimers: Map<Phaser.GameObjects.Rectangle, number> = new Map();
-  private sprayTimers: { sprite: Phaser.GameObjects.Rectangle; timer: number; active: boolean; baseY: number }[] = [];
+  private sprayTimers: { sprite: Phaser.GameObjects.Rectangle; timer: number; active: boolean; baseY: number; gfx?: Phaser.GameObjects.Graphics; dome?: Phaser.GameObjects.Graphics }[] = [];
+  private landslideData: { tile: Phaser.GameObjects.Rectangle; dir: number; speed: number; gfx: Phaser.GameObjects.Graphics; timer: number }[] = [];
   private waveZones: { gfx: Phaser.GameObjects.Graphics; hitRect: Phaser.Geom.Rectangle; timer: number; baseX: number; baseY: number; color: number; alpha: number }[] = [];
   private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number }[] = [];
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
@@ -46,6 +47,7 @@ export class GameScene extends Phaser.Scene {
     this.checkpoints = [];
     this.waterTimers = new Map();
     this.sprayTimers = [];
+    this.landslideData = [];
     this.waveZones = [];
     this.vineSwings = [];
     this.tankPushers = [];
@@ -142,6 +144,21 @@ export class GameScene extends Phaser.Scene {
             this.killGroup.add(k);
             (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
             this.waterTimers.set(k, 0);
+          } else if (this.worldIndex === 0) {
+            const k = this.add.rectangle(px, py, TILE, TILE, world.killBlockColor);
+            this.killGroup.add(k);
+            (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+            const speckleGfx = this.add.graphics();
+            const speckSeed = (tile.x * 73 + tile.y * 137) % 1000;
+            const speckRng = (i: number) => ((speckSeed + i * 397) % 1000) / 1000;
+            for (let i = 0; i < 8; i++) {
+              const sx = px - TILE / 2 + speckRng(i) * TILE;
+              const sy = py - TILE / 2 + speckRng(i + 10) * TILE;
+              const size = 1.5 + speckRng(i + 20) * 2.5;
+              const color = speckRng(i + 30) > 0.5 ? 0xffdd00 : 0xffee55;
+              speckleGfx.fillStyle(color, 0.8);
+              speckleGfx.fillRect(sx - size / 2, sy - size / 2, size, size);
+            }
           } else {
             const k = this.add.rectangle(px, py, TILE, TILE, world.killBlockColor);
             k.setStrokeStyle(1, 0xffffff, 0.2);
@@ -173,11 +190,17 @@ export class GameScene extends Phaser.Scene {
   private createSpike(px: number, py: number, world: typeof WORLDS[0]) {
     switch (this.worldIndex) {
       case 0: {
-        const spray = this.add.rectangle(px, py, 8, 4, world.spikeColor);
+        const spray = this.add.rectangle(px, py, 12, 4, world.spikeColor, 0);
         this.spikeGroup.add(spray);
-        (spray.body as Phaser.Physics.Arcade.Body).setSize(8, 4);
+        (spray.body as Phaser.Physics.Arcade.Body).setSize(12, 4);
         spray.setVisible(false);
-        this.sprayTimers.push({ sprite: spray, timer: Math.random() * 4000, active: false, baseY: py });
+        const dome = this.add.graphics();
+        dome.fillStyle(0xaa0000, 0.7);
+        dome.fillEllipse(px, py + 2, 14, 8);
+        dome.fillStyle(0xcc2200, 0.5);
+        dome.fillEllipse(px, py + 1, 10, 5);
+        const sprayGfx = this.add.graphics();
+        this.sprayTimers.push({ sprite: spray, timer: 0, active: false, baseY: py, gfx: sprayGfx, dome });
         break;
       }
       case 1: {
@@ -208,14 +231,15 @@ export class GameScene extends Phaser.Scene {
     switch (this.worldIndex) {
       case 0: {
         const slide = this.add.rectangle(px, py, TILE, TILE, world.movementColor);
-        slide.setStrokeStyle(1, 0x654321);
+        slide.setStrokeStyle(2, 0x4a2e18);
         this.movementGroup.add(slide);
         (slide.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
-        const arrow = this.add.text(px, py, tileX % 2 === 0 ? ">" : "<", {
-          fontSize: "16px",
-          fontFamily: "monospace",
-          color: "#ffffff",
-        }).setOrigin(0.5).setAlpha(0.5);
+        const dir = tileX % 2 === 0 ? 1 : -1;
+        const speedVariants = [0.6, 0.8, 1.0, 1.3, 1.6];
+        const speedIdx = (tileX * 31 + 7) % speedVariants.length;
+        const speed = PHYSICS.LANDSLIDE_BOOST * speedVariants[speedIdx];
+        const gfx = this.add.graphics();
+        this.landslideData.push({ tile: slide, dir, speed, gfx, timer: 0 });
         break;
       }
       case 1: {
@@ -288,7 +312,7 @@ export class GameScene extends Phaser.Scene {
     switch (this.worldIndex) {
       case 0:
         this.updateLavaSpray(delta);
-        this.updateLandslide();
+        this.updateLandslide(delta);
         break;
       case 1:
         this.updateWaterBlock(delta);
@@ -307,31 +331,90 @@ export class GameScene extends Phaser.Scene {
   private updateLavaSpray(delta: number) {
     this.sprayTimers.forEach((s) => {
       s.timer += delta;
-      const cycle = s.timer % 4000;
-      if (cycle < 2000 && !s.active) {
+      const cycle = s.timer % 3000;
+      if (cycle < 1500 && !s.active) {
         s.active = true;
         s.sprite.setVisible(true);
-        s.sprite.setSize(8, 48);
-        (s.sprite.body as Phaser.Physics.Arcade.Body).setSize(8, 48);
+        s.sprite.setSize(12, 48);
+        (s.sprite.body as Phaser.Physics.Arcade.Body).setSize(12, 48);
         s.sprite.y = s.baseY - 24;
-      } else if (cycle >= 2000 && s.active) {
+      } else if (cycle >= 1500 && s.active) {
         s.active = false;
         s.sprite.setVisible(false);
-        s.sprite.setSize(8, 4);
-        (s.sprite.body as Phaser.Physics.Arcade.Body).setSize(8, 4);
+        s.sprite.setSize(12, 4);
+        (s.sprite.body as Phaser.Physics.Arcade.Body).setSize(12, 4);
         s.sprite.y = s.baseY;
+      }
+
+      if (s.gfx) {
+        s.gfx.clear();
+        if (s.active) {
+          const cx = s.sprite.x;
+          const baseY = s.baseY;
+          const sprayH = 48;
+          const topY = baseY - sprayH;
+          const wobble = Math.sin(s.timer * 0.008) * 2;
+
+          s.gfx.fillStyle(0xdd0000, 0.9);
+          s.gfx.beginPath();
+          s.gfx.moveTo(cx - 3, baseY);
+          s.gfx.lineTo(cx - 8 + wobble, topY + sprayH * 0.3);
+          s.gfx.lineTo(cx - 10 + wobble, topY + sprayH * 0.1);
+          s.gfx.lineTo(cx - 6 + wobble * 0.5, topY);
+          s.gfx.lineTo(cx + wobble * 0.5, topY - 4);
+          s.gfx.lineTo(cx + 6 + wobble * 0.5, topY);
+          s.gfx.lineTo(cx + 10 - wobble, topY + sprayH * 0.1);
+          s.gfx.lineTo(cx + 8 - wobble, topY + sprayH * 0.3);
+          s.gfx.lineTo(cx + 3, baseY);
+          s.gfx.closePath();
+          s.gfx.fillPath();
+
+          s.gfx.fillStyle(0xff4400, 0.6);
+          s.gfx.beginPath();
+          s.gfx.moveTo(cx - 2, baseY);
+          s.gfx.lineTo(cx - 5 + wobble, topY + sprayH * 0.4);
+          s.gfx.lineTo(cx - 3 + wobble * 0.5, topY + sprayH * 0.15);
+          s.gfx.lineTo(cx, topY + 2);
+          s.gfx.lineTo(cx + 3 - wobble * 0.5, topY + sprayH * 0.15);
+          s.gfx.lineTo(cx + 5 - wobble, topY + sprayH * 0.4);
+          s.gfx.lineTo(cx + 2, baseY);
+          s.gfx.closePath();
+          s.gfx.fillPath();
+        }
       }
     });
   }
 
-  private updateLandslide() {
+  private updateLandslide(delta: number) {
     const playerBounds = this.player.getBounds();
-    this.movementGroup.getChildren().forEach((child) => {
-      const tile = child as Phaser.GameObjects.Rectangle;
-      const tileBounds = tile.getBounds();
+    this.landslideData.forEach((ld) => {
+      ld.timer += delta;
+      const tx = ld.tile.x;
+      const ty = ld.tile.y;
+      const half = TILE / 2;
+
+      ld.gfx.clear();
+      ld.gfx.fillStyle(0x7a5230, 0.4);
+      const scrollOffset = (ld.timer * ld.speed * 0.003 * ld.dir) % TILE;
+      const chevronSpacing = 10;
+      for (let i = -2; i < 5; i++) {
+        const cx = tx - half + i * chevronSpacing + scrollOffset;
+        if (cx < tx - half || cx > tx + half - 4) continue;
+        const cy = ty;
+        ld.gfx.fillStyle(0xccaa77, 0.5);
+        if (ld.dir > 0) {
+          ld.gfx.fillTriangle(cx, cy - 4, cx, cy + 4, cx + 5, cy);
+        } else {
+          ld.gfx.fillTriangle(cx + 5, cy - 4, cx + 5, cy + 4, cx, cy);
+        }
+      }
+
+      ld.gfx.lineStyle(1, 0x4a2e18, 0.6);
+      ld.gfx.strokeRect(tx - half, ty - half, TILE, TILE);
+
+      const tileBounds = ld.tile.getBounds();
       if (Phaser.Geom.Rectangle.Overlaps(playerBounds, tileBounds)) {
-        const dir = (tile.x > this.player.x) ? PHYSICS.LANDSLIDE_BOOST : -PHYSICS.LANDSLIDE_BOOST;
-        this.player.body.setVelocityX(this.player.body.velocity.x + dir * 0.05);
+        this.player.body.setVelocityX(this.player.body.velocity.x + ld.dir * ld.speed * 0.08);
       }
     });
   }

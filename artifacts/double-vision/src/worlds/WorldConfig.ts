@@ -15,16 +15,16 @@ export interface WorldConfig {
 export const WORLDS: WorldConfig[] = [
   {
     name: "Lava World",
-    bgColor: 0x1a0a00,
-    groundColor: 0x4a2800,
-    platformColor: 0x6b3a1a,
+    bgColor: 0x4a0000,
+    groundColor: 0x3a1212,
+    platformColor: 0x5a2020,
     killBlockName: "Lava Block",
-    killBlockColor: 0xff4400,
+    killBlockColor: 0xff8800,
     spikeName: "Lava Spray",
-    spikeColor: 0xff6600,
+    spikeColor: 0xdd0000,
     movementName: "Landslide",
-    movementColor: 0x8b5e3c,
-    checkpointColor: 0xffaa00,
+    movementColor: 0x6b4226,
+    checkpointColor: 0xffbb33,
   },
   {
     name: "Beach World",
