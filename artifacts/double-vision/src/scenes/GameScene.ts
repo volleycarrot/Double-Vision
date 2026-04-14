@@ -30,7 +30,7 @@ export class GameScene extends Phaser.Scene {
   private lavaSplashParticles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number; groundY: number }[] = [];
   private lavaSplashGfx: Phaser.GameObjects.Graphics | null = null;
   private sprayTimers: { sprite: Phaser.GameObjects.Rectangle; timer: number; active: boolean; baseY: number; gfx?: Phaser.GameObjects.Graphics; dome?: Phaser.GameObjects.Graphics }[] = [];
-  private landslideData: { tile: Phaser.GameObjects.Rectangle; dir: number; speed: number; gfx: Phaser.GameObjects.Graphics; timer: number }[] = [];
+  private landslideData: { tile: Phaser.GameObjects.Rectangle; dir: number; speed: number; gfx: Phaser.GameObjects.Graphics; timer: number; tileWidth: number }[] = [];
   private activeWaves: { gfx: Phaser.GameObjects.Graphics; x: number; y: number; targetX: number; speed: number; life: number; maxLife: number; catching: boolean }[] = [];
   private waveSpawnTimer: number = 0;
   private waveSpawnInterval: number = 2500;
@@ -226,7 +226,7 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case "movement": {
-          this.createMovement(px, py, world, tile.x);
+          this.createMovement(px, py, world, tile.x, tile.width ?? 1);
           break;
         }
         case "checkpoint": {
@@ -301,19 +301,25 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private createMovement(px: number, py: number, world: typeof WORLDS[0], tileX: number) {
+  private createMovement(px: number, py: number, world: typeof WORLDS[0], tileX: number, tileWidth: number = 1) {
     switch (this.worldIndex) {
       case 0: {
-        const slide = this.add.rectangle(px, py, TILE, TILE, world.movementColor);
+        const conveyorH = TILE / 2;
+        const conveyorW = TILE * tileWidth;
+        const centerX = px + (tileWidth - 1) * TILE / 2;
+        const surfaceY = py - TILE / 2;
+        const conveyorY = surfaceY - conveyorH / 2;
+        const dir = tileX % 2 === 0 ? 1 : -1;
+        const speedVariants = [100, 200, 300];
+        const colorVariants = [0x8b6340, 0x6b4226, 0x3d2010];
+        const speedIdx = (tileX * 31 + 7) % speedVariants.length;
+        const speed = speedVariants[speedIdx];
+        const slide = this.add.rectangle(centerX, conveyorY, conveyorW, conveyorH, colorVariants[speedIdx]);
         slide.setStrokeStyle(2, 0x4a2e18);
         this.movementGroup.add(slide);
-        (slide.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
-        const dir = tileX % 2 === 0 ? 1 : -1;
-        const speedVariants = [0.6, 0.8, 1.0, 1.3, 1.6];
-        const speedIdx = (tileX * 31 + 7) % speedVariants.length;
-        const speed = PHYSICS.LANDSLIDE_BOOST * speedVariants[speedIdx];
+        (slide.body as Phaser.Physics.Arcade.StaticBody).setSize(conveyorW, conveyorH);
         const gfx = this.add.graphics();
-        this.landslideData.push({ tile: slide, dir, speed, gfx, timer: 0 });
+        this.landslideData.push({ tile: slide, dir, speed, gfx, timer: 0, tileWidth });
         break;
       }
       case 1: {
@@ -528,30 +534,34 @@ export class GameScene extends Phaser.Scene {
       ld.timer += delta;
       const tx = ld.tile.x;
       const ty = ld.tile.y;
-      const half = TILE / 2;
+      const fullW = TILE * ld.tileWidth;
+      const halfW = fullW / 2;
+      const halfH = TILE / 4;
 
       ld.gfx.clear();
-      ld.gfx.fillStyle(0x7a5230, 0.4);
-      const scrollOffset = (ld.timer * ld.speed * 0.003 * ld.dir) % TILE;
-      const chevronSpacing = 10;
-      for (let i = -2; i < 5; i++) {
-        const cx = tx - half + i * chevronSpacing + scrollOffset;
-        if (cx < tx - half || cx > tx + half - 4) continue;
+
+      const scrollOffset = (ld.timer * ld.speed * 0.008 * ld.dir) % 12;
+      const chevronSpacing = 12;
+      const chevronH = 5;
+      const chevronW = 6;
+      for (let i = -2; i < Math.ceil(fullW / chevronSpacing) + 2; i++) {
+        const cx = tx - halfW + i * chevronSpacing + scrollOffset;
+        if (cx < tx - halfW - chevronW || cx > tx + halfW) continue;
         const cy = ty;
-        ld.gfx.fillStyle(0xccaa77, 0.5);
+        ld.gfx.fillStyle(0xccaa77, 0.6);
         if (ld.dir > 0) {
-          ld.gfx.fillTriangle(cx, cy - 4, cx, cy + 4, cx + 5, cy);
+          ld.gfx.fillTriangle(cx, cy - chevronH, cx, cy + chevronH, cx + chevronW, cy);
         } else {
-          ld.gfx.fillTriangle(cx + 5, cy - 4, cx + 5, cy + 4, cx, cy);
+          ld.gfx.fillTriangle(cx + chevronW, cy - chevronH, cx + chevronW, cy + chevronH, cx, cy);
         }
       }
 
-      ld.gfx.lineStyle(1, 0x4a2e18, 0.6);
-      ld.gfx.strokeRect(tx - half, ty - half, TILE, TILE);
+      ld.gfx.lineStyle(2, 0x4a2e18, 0.7);
+      ld.gfx.strokeRect(tx - halfW, ty - halfH, fullW, halfH * 2);
 
       const tileBounds = ld.tile.getBounds();
       const expandedBounds = new Phaser.Geom.Rectangle(
-        tileBounds.x, tileBounds.y - TILE, tileBounds.width, tileBounds.height + TILE
+        tileBounds.x, tileBounds.y - TILE * 0.5, tileBounds.width, tileBounds.height + TILE * 0.5
       );
       if (Phaser.Geom.Rectangle.Overlaps(playerBounds, expandedBounds)) {
         this.player.body.setVelocityX(this.player.body.velocity.x + ld.dir * ld.speed * 0.5);

@@ -4,6 +4,7 @@ export interface LevelTile {
   x: number;
   y: number;
   type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint";
+  width?: number;
 }
 
 function seededRandom(seed: number) {
@@ -21,6 +22,10 @@ export function generateLevel(worldIndex: number): LevelTile[] {
 
   const groundLevel = LEVEL_HEIGHT - 2;
 
+  const hazardOccupied = new Set<number>();
+  const noGroundColumns = new Set<number>();
+  const isLavaWorld = worldIndex === 0;
+
   for (let x = 0; x < LEVEL_WIDTH; x++) {
     const sectionIndex = Math.floor(x / checkpointSpacing);
     const difficulty = Math.min(sectionIndex / CHECKPOINT_COUNT, 1.0);
@@ -33,6 +38,8 @@ export function generateLevel(worldIndex: number): LevelTile[] {
       }
       tiles.push({ x, y: groundLevel - 3, type: "checkpoint" });
       tiles.push({ x: x + 1, y: groundLevel, type: "ground" });
+      noGroundColumns.add(x);
+      noGroundColumns.add(x + 1);
       continue;
     }
 
@@ -45,20 +52,37 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     const gapChance = 0.08 + difficulty * 0.12;
     const isGap = rand() < gapChance && x % 3 === 0;
 
+    if (isGap) {
+      noGroundColumns.add(x);
+    }
+
     if (!isGap) {
       tiles.push({ x, y: groundLevel, type: "ground" });
       tiles.push({ x, y: groundLevel + 1, type: "ground" });
 
       if (rand() < 0.06 + difficulty * 0.08) {
-        tiles.push({ x, y: groundLevel, type: "kill" });
+        if (!hazardOccupied.has(x)) {
+          tiles.push({ x, y: groundLevel, type: "kill" });
+          hazardOccupied.add(x);
+        }
       }
 
       if (rand() < 0.04 + difficulty * 0.06) {
-        tiles.push({ x, y: groundLevel - 1, type: "spike" });
+        if (!hazardOccupied.has(x)) {
+          tiles.push({ x, y: groundLevel - 1, type: "spike" });
+          hazardOccupied.add(x);
+        }
       }
 
-      if (rand() < 0.05 + difficulty * 0.05) {
-        tiles.push({ x, y: groundLevel, type: "movement" });
+      if (!isLavaWorld) {
+        if (rand() < 0.05 + difficulty * 0.05) {
+          if (!hazardOccupied.has(x)) {
+            tiles.push({ x, y: groundLevel, type: "movement" });
+            hazardOccupied.add(x);
+          }
+        }
+      } else {
+        rand();
       }
     }
 
@@ -68,6 +92,36 @@ export function generateLevel(worldIndex: number): LevelTile[] {
       for (let px = 0; px < platLen && x + px < LEVEL_WIDTH; px++) {
         tiles.push({ x: x + px, y: platY, type: "platform" });
       }
+    }
+  }
+
+  if (isLavaWorld) {
+    const conveyorRand = seededRandom(worldIndex * 1000 + 9999);
+    let cx = 8;
+    while (cx < LEVEL_WIDTH - 8) {
+      const sectionIndex = Math.floor(cx / checkpointSpacing);
+      const difficulty = Math.min(sectionIndex / CHECKPOINT_COUNT, 1.0);
+      const chance = 0.05 + difficulty * 0.05;
+      if (conveyorRand() < chance) {
+        const stripLen = 3 + Math.floor(conveyorRand() * 3);
+        let canPlace = true;
+        for (let i = 0; i < stripLen; i++) {
+          const col = cx + i;
+          if (col >= LEVEL_WIDTH - 5 || hazardOccupied.has(col) || noGroundColumns.has(col)) {
+            canPlace = false;
+            break;
+          }
+        }
+        if (canPlace) {
+          tiles.push({ x: cx, y: groundLevel, type: "movement", width: stripLen });
+          for (let i = 0; i < stripLen; i++) {
+            hazardOccupied.add(cx + i);
+          }
+          cx += stripLen + 2;
+          continue;
+        }
+      }
+      cx++;
     }
   }
 
