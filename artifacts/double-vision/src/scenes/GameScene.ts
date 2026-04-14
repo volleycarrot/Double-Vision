@@ -26,7 +26,7 @@ export class GameScene extends Phaser.Scene {
   private deathText!: Phaser.GameObjects.Text;
   private worldText!: Phaser.GameObjects.Text;
   private waterTimers: Map<Phaser.GameObjects.Rectangle, number> = new Map();
-  private lavaTimers: Map<Phaser.GameObjects.Rectangle, number> = new Map();
+
   private lavaSplashParticles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number; groundY: number }[] = [];
   private lavaSplashGfx: Phaser.GameObjects.Graphics | null = null;
   private sprayTimers: { sprite: Phaser.GameObjects.Rectangle; timer: number; active: boolean; baseY: number; gfx?: Phaser.GameObjects.Graphics; dome?: Phaser.GameObjects.Graphics }[] = [];
@@ -53,7 +53,7 @@ export class GameScene extends Phaser.Scene {
     this.isDucking = false;
     this.checkpoints = [];
     this.waterTimers = new Map();
-    this.lavaTimers = new Map();
+
     this.lavaSplashParticles = [];
     this.lavaSplashGfx = null;
     this.sprayTimers = [];
@@ -97,7 +97,6 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.platformGroup);
 
     this.physics.add.overlap(this.player, this.killGroup, (_p, _kill) => {
-      if (this.worldIndex === 0) return;
       this.handleDeath();
     }, undefined, this);
     this.physics.add.overlap(this.player, this.spikeGroup, (_p, spike) => {
@@ -199,7 +198,7 @@ export class GameScene extends Phaser.Scene {
             const k = this.add.rectangle(px, puddleY, TILE, puddleH, world.killBlockColor, 0.85);
             this.killGroup.add(k);
             (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, puddleH);
-            this.lavaTimers.set(k, 0);
+
             const speckleGfx = this.add.graphics();
             const speckSeed = (tile.x * 73 + tile.y * 137) % 1000;
             const speckRng = (i: number) => ((speckSeed + i * 397) % 1000) / 1000;
@@ -386,7 +385,7 @@ export class GameScene extends Phaser.Scene {
   private updateWorldMechanics(delta: number) {
     switch (this.worldIndex) {
       case 0:
-        this.updateLavaBlock(delta);
+
         this.updateLavaSpray(delta);
         this.updateLandslide(delta);
         break;
@@ -404,23 +403,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private updateLavaBlock(delta: number) {
-    const playerBounds = this.player.getBounds();
-    this.lavaTimers.forEach((timer, block) => {
-      const blockBounds = block.getBounds();
-      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, blockBounds)) {
-        const newTimer = timer + delta;
-        this.lavaTimers.set(block, newTimer);
-        this.player.body.setVelocityX(this.player.body.velocity.x * 0.85);
-        this.player.body.setVelocityY(this.player.body.velocity.y + PHYSICS.QUICKSAND_SINK);
-        if (newTimer > 1500) {
-          this.handleDeath();
-        }
-      } else {
-        this.lavaTimers.set(block, 0);
-      }
-    });
-  }
 
   private updateLavaSpray(delta: number) {
     this.sprayTimers.forEach((s) => {
