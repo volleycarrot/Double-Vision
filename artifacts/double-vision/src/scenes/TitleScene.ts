@@ -1,11 +1,18 @@
 import Phaser from "phaser";
+import { WORLDS } from "../worlds/WorldConfig";
 
 export class TitleScene extends Phaser.Scene {
+  private devMenuOpen = false;
+  private devContainer: Phaser.GameObjects.Container | null = null;
+
   constructor() {
     super({ key: "TitleScene" });
   }
 
   create() {
+    this.devMenuOpen = false;
+    this.devContainer = null;
+
     const { width, height } = this.scale;
 
     this.cameras.main.setBackgroundColor("#1a1a2e");
@@ -85,7 +92,81 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.input.keyboard!.once("keydown-ENTER", () => {
+      if (this.devMenuOpen) return;
       this.scene.start("WarningScene", { worldIndex: 0, deaths: 0, startTime: Date.now() });
+    });
+
+    const devBtn = this.add.text(width - 12, height - 12, "DEV", {
+      fontSize: "11px",
+      fontFamily: "monospace",
+      color: "#555555",
+      backgroundColor: "#1a1a2e",
+      padding: { x: 6, y: 3 },
+    }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+
+    devBtn.on("pointerover", () => devBtn.setColor("#aaaaaa"));
+    devBtn.on("pointerout", () => devBtn.setColor("#555555"));
+    devBtn.on("pointerdown", () => this.toggleDevMenu());
+  }
+
+  private toggleDevMenu() {
+    if (this.devMenuOpen && this.devContainer) {
+      this.devContainer.destroy();
+      this.devContainer = null;
+      this.devMenuOpen = false;
+      return;
+    }
+
+    this.devMenuOpen = true;
+    const { width, height } = this.scale;
+
+    const panelW = 260;
+    const panelH = 44 + WORLDS.length * 40;
+    const panelX = width / 2;
+    const panelY = height / 2;
+
+    this.devContainer = this.add.container(panelX, panelY).setDepth(200);
+
+    const bg = this.add.rectangle(0, 0, panelW, panelH, 0x0a0a1e, 0.95);
+    bg.setStrokeStyle(2, 0xe94560);
+    this.devContainer.add(bg);
+
+    const header = this.add.text(0, -panelH / 2 + 18, "SELECT WORLD", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#e94560",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.devContainer.add(header);
+
+    WORLDS.forEach((world, i) => {
+      const btnY = -panelH / 2 + 50 + i * 40;
+
+      const btnBg = this.add.rectangle(0, btnY, panelW - 24, 32, 0x16213e, 0.9);
+      btnBg.setStrokeStyle(1, 0x0f3460);
+      btnBg.setInteractive({ useHandCursor: true });
+
+      const colorSwatch = this.add.rectangle(-panelW / 2 + 28, btnY, 14, 14, world.groundColor);
+
+      const label = this.add.text(-panelW / 2 + 44, btnY, `${i + 1}. ${world.name}`, {
+        fontSize: "13px",
+        fontFamily: "monospace",
+        color: "#cccccc",
+      }).setOrigin(0, 0.5);
+
+      btnBg.on("pointerover", () => {
+        btnBg.setFillStyle(0x1e2d4a, 1);
+        label.setColor("#ffffff");
+      });
+      btnBg.on("pointerout", () => {
+        btnBg.setFillStyle(0x16213e, 0.9);
+        label.setColor("#cccccc");
+      });
+      btnBg.on("pointerdown", () => {
+        this.scene.start("WarningScene", { worldIndex: i, deaths: 0, startTime: Date.now() });
+      });
+
+      this.devContainer!.add([btnBg, colorSwatch, label]);
     });
   }
 }
