@@ -17,15 +17,27 @@ export class TitleScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor("#1a1a2e");
 
-    const title = this.add.text(width / 2, height * 0.25, "DOUBLE VISION", {
+    const title = this.add.text(width / 2, height * 0.2, "DOUBLE VISION", {
       fontSize: "48px",
       fontFamily: "monospace",
-      color: "#00ffcc",
+      color: "#ff2222",
       fontStyle: "bold",
     });
     title.setOrigin(0.5);
 
-    const subtitle = this.add.text(width / 2, height * 0.38, "2-Player Co-op Platformer", {
+    const devBtn = this.add.text(width / 2, height * 0.28, "[ DEV: SELECT WORLD ]", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#ff6666",
+      backgroundColor: "#330000",
+      padding: { x: 12, y: 6 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+    devBtn.on("pointerover", () => devBtn.setColor("#ffffff"));
+    devBtn.on("pointerout", () => devBtn.setColor("#ff6666"));
+    devBtn.on("pointerdown", () => this.toggleDevMenu());
+
+    const subtitle = this.add.text(width / 2, height * 0.36, "2-Player Co-op Platformer", {
       fontSize: "18px",
       fontFamily: "monospace",
       color: "#aaaacc",
@@ -95,18 +107,6 @@ export class TitleScene extends Phaser.Scene {
       if (this.devMenuOpen) return;
       this.scene.start("WarningScene", { worldIndex: 0, deaths: 0, startTime: Date.now() });
     });
-
-    const devBtn = this.add.text(width - 12, height - 12, "DEV", {
-      fontSize: "11px",
-      fontFamily: "monospace",
-      color: "#555555",
-      backgroundColor: "#1a1a2e",
-      padding: { x: 6, y: 3 },
-    }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
-
-    devBtn.on("pointerover", () => devBtn.setColor("#aaaaaa"));
-    devBtn.on("pointerout", () => devBtn.setColor("#555555"));
-    devBtn.on("pointerdown", () => this.toggleDevMenu());
   }
 
   private toggleDevMenu() {
