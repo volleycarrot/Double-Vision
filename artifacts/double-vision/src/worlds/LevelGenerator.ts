@@ -3,7 +3,7 @@ import { TILE, LEVEL_WIDTH, LEVEL_HEIGHT, CHECKPOINT_COUNT, type WorldConfig } f
 export interface LevelTile {
   x: number;
   y: number;
-  type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint";
+  type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint" | "cave";
   width?: number;
 }
 
@@ -147,6 +147,63 @@ export function generateLevel(worldIndex: number): LevelTile[] {
         }
       }
       cx++;
+    }
+
+    const caveRand = seededRandom(worldIndex * 1000 + 7777);
+    let caveX = 15;
+    while (caveX < LEVEL_WIDTH - 10) {
+      const sectionIndex = Math.floor(caveX / checkpointSpacing);
+      const difficulty = Math.min(sectionIndex / CHECKPOINT_COUNT, 1.0);
+      const chance = 0.06 + difficulty * 0.06;
+      if (caveRand() < chance) {
+        let canPlace = true;
+        for (let dx = -2; dx <= 2; dx++) {
+          const col = caveX + dx;
+          if (col < 5 || col >= LEVEL_WIDTH - 5 || noGroundColumns.has(col)) {
+            canPlace = false;
+            break;
+          }
+        }
+        const isNearCheckpoint = tiles.some(t =>
+          t.type === "checkpoint" && Math.abs(t.x - caveX) <= 4
+        );
+        if (canPlace && !isNearCheckpoint) {
+          const caveLen = caveRand() < 0.5 ? 2 : 3;
+          let canFitLen = true;
+          for (let dx = 0; dx < caveLen; dx++) {
+            const col = caveX + dx;
+            if (col >= LEVEL_WIDTH - 5 || noGroundColumns.has(col)) {
+              canFitLen = false;
+              break;
+            }
+          }
+          if (canFitLen) {
+            tiles.push({ x: caveX, y: groundLevel - 1, type: "cave", width: caveLen });
+            for (let dx = 0; dx < caveLen; dx++) {
+              hazardOccupied.add(caveX + dx);
+            }
+            caveX += caveLen + 8;
+            continue;
+          }
+        }
+      }
+      caveX++;
+    }
+
+    const caveClearRadius = 2;
+    const caveTiles = tiles.filter(t => t.type === "cave");
+    const hazardTypesForCaveClear = new Set(["kill", "spike", "movement"]);
+    for (let i = tiles.length - 1; i >= 0; i--) {
+      const t = tiles[i];
+      if (!hazardTypesForCaveClear.has(t.type)) continue;
+      for (const cave of caveTiles) {
+        const caveEndX = cave.x + (cave.width ?? 1) - 1;
+        const tileEndX = t.width ? t.x + t.width - 1 : t.x;
+        if (t.x <= caveEndX + caveClearRadius && tileEndX >= cave.x - caveClearRadius) {
+          tiles.splice(i, 1);
+          break;
+        }
+      }
     }
   }
 

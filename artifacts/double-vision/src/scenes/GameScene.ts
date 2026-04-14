@@ -16,6 +16,7 @@ export class GameScene extends Phaser.Scene {
   private killGroup!: Phaser.Physics.Arcade.StaticGroup;
   private spikeGroup!: Phaser.Physics.Arcade.Group;
   private movementGroup!: Phaser.Physics.Arcade.StaticGroup;
+  private caveGroup!: Phaser.Physics.Arcade.StaticGroup;
   private checkpoints: { x: number; y: number; reached: boolean; marker: Phaser.GameObjects.Container }[] = [];
   private worldIndex: number = 0;
   private deaths: number = 0;
@@ -84,6 +85,7 @@ export class GameScene extends Phaser.Scene {
     this.killGroup = this.physics.add.staticGroup();
     this.spikeGroup = this.physics.add.group({ allowGravity: false });
     this.movementGroup = this.physics.add.staticGroup();
+    this.caveGroup = this.physics.add.staticGroup();
 
     const levelTiles = generateLevel(this.worldIndex);
     this.buildLevel(levelTiles, world);
@@ -102,6 +104,7 @@ export class GameScene extends Phaser.Scene {
 
     this.physics.add.collider(this.player, this.groundGroup);
     this.physics.add.collider(this.player, this.platformGroup);
+    this.physics.add.collider(this.player, this.caveGroup);
 
     this.physics.add.overlap(this.player, this.killGroup, (_p, _kill) => {
       this.handleDeath();
@@ -257,6 +260,111 @@ export class GameScene extends Phaser.Scene {
           this.createMovement(px, py, world, tile.x, tile.width ?? 1);
           break;
         }
+        case "cave": {
+          const groundSurfaceY = (LEVEL_HEIGHT - 2) * TILE;
+          const caveGap = 20;
+          const caveH = TILE;
+          const caveWidth = tile.width ?? 2;
+          const totalW = TILE * caveWidth;
+          const centerX = px + (caveWidth - 1) * TILE / 2;
+          const caveCenterY = groundSurfaceY - caveGap - caveH / 2;
+          const caveLeft = centerX - totalW / 2;
+
+          const caveGfx = this.add.graphics();
+
+          caveGfx.fillStyle(0x2a0e0e, 1);
+          caveGfx.fillRect(caveLeft, caveCenterY - caveH / 2, totalW, caveH);
+
+          caveGfx.fillStyle(0x1a0808, 1);
+          caveGfx.fillRect(caveLeft, caveCenterY - caveH / 2, totalW, 4);
+          caveGfx.fillStyle(0x3a1818, 0.8);
+          caveGfx.fillRect(caveLeft, caveCenterY + caveH / 2 - 6, totalW, 6);
+
+          const rockSeed = (tile.x * 53 + tile.y * 97) % 1000;
+          const rockRng = (i: number) => ((rockSeed + i * 311) % 1000) / 1000;
+          const speckleCount = 4 * caveWidth;
+          for (let i = 0; i < speckleCount; i++) {
+            const rx = caveLeft + 2 + rockRng(i) * (totalW - 4);
+            const ry = caveCenterY - caveH / 2 + 4 + rockRng(i + 10) * (caveH - 8);
+            const rsize = 1 + rockRng(i + 20) * 3;
+            const shade = rockRng(i + 30) > 0.5 ? 0x4a1e1e : 0x1e0a0a;
+            caveGfx.fillStyle(shade, 0.7);
+            caveGfx.fillCircle(rx, ry, rsize);
+          }
+
+          caveGfx.fillStyle(0x000000, 0.35);
+          caveGfx.fillRect(caveLeft, caveCenterY + caveH / 2 - 3, totalW, 5);
+
+          caveGfx.lineStyle(2, 0x1a0808, 0.9);
+          caveGfx.strokeRect(caveLeft, caveCenterY - caveH / 2, totalW, caveH);
+
+          caveGfx.fillStyle(0x2a0e0e, 1);
+          caveGfx.fillTriangle(
+            caveLeft - 6, caveCenterY + caveH / 2,
+            caveLeft, caveCenterY + caveH / 2,
+            caveLeft, caveCenterY + caveH / 2 - 10
+          );
+          caveGfx.fillTriangle(
+            caveLeft + totalW + 6, caveCenterY + caveH / 2,
+            caveLeft + totalW, caveCenterY + caveH / 2,
+            caveLeft + totalW, caveCenterY + caveH / 2 - 10
+          );
+
+          caveGfx.fillStyle(0x000000, 0.2);
+          caveGfx.fillTriangle(
+            caveLeft - 6, caveCenterY + caveH / 2,
+            caveLeft, caveCenterY + caveH / 2,
+            caveLeft, caveCenterY + caveH / 2 - 10
+          );
+          caveGfx.fillTriangle(
+            caveLeft + totalW + 6, caveCenterY + caveH / 2,
+            caveLeft + totalW, caveCenterY + caveH / 2,
+            caveLeft + totalW, caveCenterY + caveH / 2 - 10
+          );
+
+          const caveBlock = this.add.rectangle(centerX, caveCenterY, totalW, caveH, 0x000000, 0);
+          this.caveGroup.add(caveBlock);
+          (caveBlock.body as Phaser.Physics.Arcade.StaticBody).setSize(totalW, caveH);
+
+          const stackTop = caveCenterY - caveH / 2;
+          const stackRows = 3;
+          for (let row = 0; row < stackRows; row++) {
+            const rowY = stackTop - TILE * row - TILE / 2;
+            const rowColors = [0x2a0e0e, 0x220b0b, 0x1a0808];
+            caveGfx.fillStyle(rowColors[row] || 0x1a0808, 1);
+            caveGfx.fillRect(caveLeft, rowY - TILE / 2, totalW, TILE);
+
+            caveGfx.lineStyle(1, 0x1a0808, 0.6);
+            caveGfx.strokeRect(caveLeft, rowY - TILE / 2, totalW, TILE);
+
+            for (let i = 0; i < 3 * caveWidth; i++) {
+              const sx = caveLeft + 2 + rockRng(i + 50 + row * 20) * (totalW - 4);
+              const sy = rowY - TILE / 2 + 2 + rockRng(i + 60 + row * 20) * (TILE - 4);
+              const ss = 1 + rockRng(i + 70 + row * 20) * 2;
+              caveGfx.fillStyle(rockRng(i + 80 + row * 20) > 0.5 ? 0x3a1818 : 0x150606, 0.6);
+              caveGfx.fillCircle(sx, sy, ss);
+            }
+
+            const stackBlock = this.add.rectangle(centerX, rowY, totalW, TILE, 0x000000, 0);
+            this.caveGroup.add(stackBlock);
+            (stackBlock.body as Phaser.Physics.Arcade.StaticBody).setSize(totalW, TILE);
+          }
+
+          const topRowY = stackTop - TILE * stackRows;
+          caveGfx.fillStyle(0x2a0e0e, 1);
+          const jagPoints = 5 + caveWidth * 2;
+          for (let j = 0; j < jagPoints; j++) {
+            const jx = caveLeft + (j / (jagPoints - 1)) * totalW;
+            const jh = 4 + rockRng(j + 100) * 8;
+            caveGfx.fillTriangle(
+              jx - 4 - rockRng(j + 110) * 3, topRowY,
+              jx + rockRng(j + 120) * 2, topRowY - jh,
+              jx + 4 + rockRng(j + 130) * 3, topRowY
+            );
+          }
+
+          break;
+        }
         case "checkpoint": {
           const groundSurfaceY = (LEVEL_HEIGHT - 2) * TILE;
           const flagY = groundSurfaceY - 20;
@@ -398,10 +506,29 @@ export class GameScene extends Phaser.Scene {
       this.player.body.setSize(28, PHYSICS.DUCK_HEIGHT);
       this.player.y += (PHYSICS.NORMAL_HEIGHT - PHYSICS.DUCK_HEIGHT) / 2;
     } else if (!this.cursors.duck.isDown && this.isDucking) {
-      this.isDucking = false;
-      this.player.setSize(28, PHYSICS.NORMAL_HEIGHT);
-      this.player.body.setSize(28, PHYSICS.NORMAL_HEIGHT);
-      this.player.y -= (PHYSICS.NORMAL_HEIGHT - PHYSICS.DUCK_HEIGHT) / 2;
+      const heightDiff = PHYSICS.NORMAL_HEIGHT - PHYSICS.DUCK_HEIGHT;
+      const proposedTop = this.player.body.y - heightDiff;
+      let blocked = false;
+      this.caveGroup.children.each((child: Phaser.GameObjects.GameObject) => {
+        const body = (child as Phaser.GameObjects.Rectangle).body as Phaser.Physics.Arcade.StaticBody;
+        const caveLeft = body.x;
+        const caveRight = body.x + body.width;
+        const caveTop = body.y;
+        const caveBottom = body.y + body.height;
+        const playerLeft = this.player.body.x;
+        const playerRight = this.player.body.x + this.player.body.width;
+        if (playerRight > caveLeft && playerLeft < caveRight &&
+            proposedTop < caveBottom && this.player.body.bottom > caveTop) {
+          blocked = true;
+        }
+        return true;
+      });
+      if (!blocked) {
+        this.isDucking = false;
+        this.player.setSize(28, PHYSICS.NORMAL_HEIGHT);
+        this.player.body.setSize(28, PHYSICS.NORMAL_HEIGHT);
+        this.player.y -= heightDiff / 2;
+      }
     }
 
     this.updateWorldMechanics(delta);
