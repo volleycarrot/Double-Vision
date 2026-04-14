@@ -1,0 +1,90 @@
+Build a 2-player co-op 2D platformer called "Double Vision" using Phaser 3
+
+Core Concept
+One on-screen square character, two players on the same keyboard:
+Player
+Keys
+Actions
+Player 1
+W / S
+Jump / Duck
+Player 2
+← / →
+Move left / Move right
+
+The character is a colored square (default: blue, ~32×32 px). Ducking halves the character's height for the duration of the keypress.
+
+Game Structure
+4 worlds played in sequence. Each world has 1 scrolling level with 5 evenly-spaced checkpoints (flagpole sprite or colored marker). On death the character respawns at the last checkpoint reached. Completing a level transitions to the next world. Completing all 4 shows a "You Win" screen with total deaths and elapsed time.
+
+World Definitions
+Each world has its own tileset palette, a unique kill block, a unique spike/hazard, and a unique movement mechanic.
+World 1 — Lava World (reds/oranges/blacks)
+Element
+Type
+Behavior
+Lava Block
+Kill
+Static tile; instant death on any contact
+Lava Spray
+Spike
+Animated column that erupts upward on a timer (2 s on / 2 s off); kills on contact
+Landslide
+Movement
+Sloped surface that applies constant horizontal velocity in its direction while the player stands on it (conveyor belt physics)
+
+World 2 — Beach World (blues/yellows/tans)
+Element
+Type
+Behavior
+Water Block
+Kill
+Tile that pulls the player downward when entered; death after 1.5 s submerge
+Glass Shard
+Spike
+Static sharp tile on ground; instant death on contact from above
+Wave
+Movement
+Horizontal force zone that sweeps left→right at high speed on a loop; carries the player with it while overlapping
+
+
+
+World 3 — Jungle World (greens/browns) Detail to Follow
+World 4 — War Zone (grays/dark greens/military) Detail to Follow
+Level Design Rules
+Each level is a Phaser tilemap built procedurally or from a hardcoded 2D array (~200 tiles wide × 15 tiles tall, tile size 32 px).
+Platforms, gaps, and hazards should ramp in density from checkpoint to checkpoint.
+Place each world's three unique elements throughout the level; no other hazard types appear.
+Solid ground tiles use the world's palette. Background is a solid color or simple gradient matching the theme.
+
+Physics & Movement Constants
+Use Phaser Arcade Physics:
+gravity Y:        800
+move speed:       200 (horizontal)
+jump velocity:   -400 (Y)
+duck height:      16 px (normal = 32 px)
+landslide boost:  120 (added horizontal)
+wave speed:       350 (horizontal force)
+quicksand sink:    50 (downward pull per frame)
+vine swing:       simple sine-based X oscillation, ±60 px
+tank speed:        80 (horizontal)
+bullet speed:     300 (horizontal)
+
+
+Screens & UI Flow
+Title Screen — Game title, "Press ENTER to Start" prompt, and brief 2-player control diagram.
+Warning Popup — Before each world: world name + icons/names of its 3 hazards. "Press ENTER to continue."
+In-Game HUD — Top-left: current world name. Top-right: death counter. Checkpoint markers visible in-level.
+Death — Instant respawn at last checkpoint.
+Win Screen — "You Win!", total deaths, elapsed time, "Press ENTER to Restart."
+
+Implementation Priority
+Build in this order so each step is playable:
+Scaffold HTML + Phaser config + TitleScene with ENTER to proceed.
+GameScene with ground tiles, player square, gravity, movement (← →), jump (W), duck (S).
+Add side-scrolling camera, platforms, gaps, and 5 checkpoint flags for World 1.
+Implement Lava Block (kill), Lava Spray (timed spike), and Landslide (conveyor).
+Death → respawn-at-checkpoint logic, death counter HUD.
+WarningScene popup before each world.
+Build remaining 3 worlds with their unique elements.
+WinScene with stats.
