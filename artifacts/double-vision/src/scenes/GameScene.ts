@@ -40,8 +40,8 @@ export class GameScene extends Phaser.Scene {
   private waveSpawnInterval: number = 2500;
   private oceanGfx: Phaser.GameObjects.Graphics | null = null;
   private oceanTimer: number = 0;
-  private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number }[] = [];
-  private grabbedVine: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number } | null = null;
+  private vineSwings: { pivot: Phaser.GameObjects.Graphics; anchorGfx: Phaser.GameObjects.Graphics; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number }[] = [];
+  private grabbedVine: { pivot: Phaser.GameObjects.Graphics; anchorGfx: Phaser.GameObjects.Graphics; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number } | null = null;
   private vineGrabCooldown: number = 0;
   private vineGrabGfx: Phaser.GameObjects.Graphics | null = null;
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
@@ -524,13 +524,13 @@ export class GameScene extends Phaser.Scene {
       case 2: {
         const vAnchorY = py - TILE * 5;
         const vRopeLen = TILE * 4;
+        const anchorGfx = this.add.graphics();
+        this.drawVineAnchor(anchorGfx, px, vAnchorY);
         const vineGfx = this.add.graphics();
-        vineGfx.fillStyle(0x3b2a10, 1);
-        vineGfx.fillRect(px - TILE / 2, vAnchorY - 4, TILE, 8);
-        const vine = this.add.rectangle(px, vAnchorY, 4, vRopeLen, 0x228b22);
-        vine.setOrigin(0.5, 0);
+        this.drawIdleVine(vineGfx, 0, 0, vRopeLen);
+        vineGfx.setPosition(px, vAnchorY);
         const grabZone = this.add.rectangle(px, vAnchorY + vRopeLen - TILE / 2, TILE, TILE, 0x000000, 0);
-        this.vineSwings.push({ pivot: vine, platform: grabZone, angle: Math.random() * Math.PI * 2, baseX: px, anchorY: vAnchorY, ropeLen: vRopeLen });
+        this.vineSwings.push({ pivot: vineGfx, anchorGfx, platform: grabZone, angle: Math.random() * Math.PI * 2, baseX: px, anchorY: vAnchorY, ropeLen: vRopeLen });
         break;
       }
       case 3: {
@@ -584,11 +584,7 @@ export class GameScene extends Phaser.Scene {
           this.vineGrabGfx = this.add.graphics();
         }
         this.vineGrabGfx.clear();
-        this.vineGrabGfx.lineStyle(3, 0x32cd32, 1);
-        this.vineGrabGfx.beginPath();
-        this.vineGrabGfx.moveTo(v.baseX, v.anchorY);
-        this.vineGrabGfx.lineTo(this.player.x, this.player.y);
-        this.vineGrabGfx.strokePath();
+        this.drawGrabbedVine(this.vineGrabGfx, v.baseX, v.anchorY, this.player.x, this.player.y);
       }
     } else if (this.quicksandContactTimer > 0) {
       this.player.body.setVelocityX(0);
@@ -1071,6 +1067,113 @@ export class GameScene extends Phaser.Scene {
       maxLife,
       catching: false,
     });
+  }
+
+  private drawVineAnchor(gfx: Phaser.GameObjects.Graphics, cx: number, ay: number) {
+    gfx.fillStyle(0x5a3a1a, 1);
+    gfx.fillRoundedRect(cx - TILE * 0.6, ay - 6, TILE * 1.2, 12, 4);
+    gfx.fillStyle(0x3b2a10, 1);
+    gfx.fillRoundedRect(cx - TILE * 0.5, ay - 4, TILE, 8, 3);
+    gfx.fillStyle(0x2a1a08, 1);
+    gfx.fillCircle(cx - TILE * 0.4, ay, 3);
+    gfx.fillCircle(cx + TILE * 0.4, ay, 3);
+    gfx.fillStyle(0x6b4226, 1);
+    gfx.fillRect(cx - 1, ay - 6, 2, 4);
+
+    gfx.fillStyle(0x228b22, 0.8);
+    gfx.fillEllipse(cx - TILE * 0.55, ay - 3, 8, 5);
+    gfx.fillEllipse(cx + TILE * 0.5, ay - 2, 7, 4);
+  }
+
+  private drawIdleVine(gfx: Phaser.GameObjects.Graphics, x: number, y: number, length: number) {
+    const segments = 12;
+    const segLen = length / segments;
+
+    for (let i = 0; i < segments; i++) {
+      const t = i / segments;
+      const thickness = 3 + Math.sin(t * Math.PI) * 2.5;
+      const sy = y + i * segLen;
+      const wobble = Math.sin(t * Math.PI * 3) * 2;
+
+      const darkGreen = i % 2 === 0 ? 0x1a6b1a : 0x228b22;
+      gfx.fillStyle(darkGreen, 1);
+      gfx.fillRect(x - thickness / 2 + wobble, sy, thickness, segLen + 1);
+
+      if (i > 0 && i < segments - 1) {
+        const knotColor = i % 3 === 0 ? 0x3b5e2b : 0x2d4a1e;
+        gfx.fillStyle(knotColor, 1);
+        gfx.fillCircle(x + wobble, sy, thickness / 2 + 1);
+      }
+    }
+
+    const leafPositions = [0.2, 0.45, 0.7, 0.9];
+    leafPositions.forEach((frac, idx) => {
+      const ly = y + length * frac;
+      const lx = x + (idx % 2 === 0 ? 1 : -1) * 4;
+      const dir = idx % 2 === 0 ? 1 : -1;
+      gfx.fillStyle(0x32cd32, 0.9);
+      gfx.fillEllipse(lx + dir * 6, ly, 10, 5);
+      gfx.fillStyle(0x228b22, 0.7);
+      gfx.fillEllipse(lx + dir * 5, ly + 1, 8, 3);
+
+      if (idx === 1 || idx === 3) {
+        gfx.fillStyle(0x3cb371, 0.8);
+        gfx.fillEllipse(lx + dir * 10, ly + 3, 7, 4);
+      }
+    });
+  }
+
+  private drawGrabbedVine(gfx: Phaser.GameObjects.Graphics, x1: number, y1: number, x2: number, y2: number) {
+    const segs = 10;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const sag = Math.max(8, dist * 0.12);
+
+    const pts: { x: number; y: number }[] = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const px = x1 + dx * t;
+      const py = y1 + dy * t;
+      const sagAmount = sag * (4 * t * (1 - t));
+      pts.push({ x: px, y: py + sagAmount });
+    }
+
+    gfx.lineStyle(5, 0x3b2a10, 0.6);
+    gfx.beginPath();
+    gfx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      gfx.lineTo(pts[i].x, pts[i].y);
+    }
+    gfx.strokePath();
+
+    gfx.lineStyle(3, 0x228b22, 1);
+    gfx.beginPath();
+    gfx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      gfx.lineTo(pts[i].x, pts[i].y);
+    }
+    gfx.strokePath();
+
+    gfx.lineStyle(1.5, 0x32cd32, 0.7);
+    gfx.beginPath();
+    gfx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      gfx.lineTo(pts[i].x, pts[i].y);
+    }
+    gfx.strokePath();
+
+    for (let i = 2; i < pts.length - 1; i += 3) {
+      const p = pts[i];
+      const dir = i % 2 === 0 ? 1 : -1;
+      gfx.fillStyle(0x32cd32, 0.85);
+      gfx.fillEllipse(p.x + dir * 5, p.y + 2, 8, 4);
+    }
+
+    for (let i = 1; i < pts.length; i += 2) {
+      gfx.fillStyle(0x1a6b1a, 0.5);
+      gfx.fillCircle(pts[i].x, pts[i].y, 2.5);
+    }
   }
 
   private updateVineSwings(delta: number) {
