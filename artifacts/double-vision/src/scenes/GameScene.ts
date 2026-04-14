@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } from "../worlds/WorldConfig";
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
+import { getSelectedColor, drawEyes } from "../PlayerConfig";
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -46,6 +47,7 @@ export class GameScene extends Phaser.Scene {
   private pauseContainer: Phaser.GameObjects.Container | null = null;
   private pauseKey1!: Phaser.Input.Keyboard.Key;
   private pauseKey2!: Phaser.Input.Keyboard.Key;
+  private eyesGfx!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: "GameScene" });
@@ -95,12 +97,15 @@ export class GameScene extends Phaser.Scene {
     this.lastCheckpointX = spawnX;
     this.lastCheckpointY = spawnY;
 
-    const playerRect = this.add.rectangle(spawnX, spawnY, 28, PHYSICS.NORMAL_HEIGHT, 0x4488ff);
-    playerRect.setStrokeStyle(2, 0x66aaff);
+    const color = getSelectedColor();
+    const playerRect = this.add.rectangle(spawnX, spawnY, 28, PHYSICS.NORMAL_HEIGHT, color.fill);
+    playerRect.setStrokeStyle(2, color.stroke);
     this.physics.add.existing(playerRect);
     this.player = playerRect as any;
     this.player.body.setCollideWorldBounds(false);
     this.player.body.setSize(28, PHYSICS.NORMAL_HEIGHT);
+
+    this.eyesGfx = this.add.graphics().setDepth(10);
 
     this.physics.add.collider(this.player, this.groundGroup);
     this.physics.add.collider(this.player, this.platformGroup);
@@ -583,6 +588,9 @@ export class GameScene extends Phaser.Scene {
 
     this.updateWorldMechanics(delta);
     this.checkCheckpoints();
+
+    const currentHeight = this.isDucking ? PHYSICS.DUCK_HEIGHT : PHYSICS.NORMAL_HEIGHT;
+    drawEyes(this.eyesGfx, this.player.x, this.player.y, currentHeight);
 
     if (this.player.x > (LEVEL_WIDTH - 3) * TILE) {
       this.completeWorld();

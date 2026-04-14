@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { WORLDS } from "../worlds/WorldConfig";
 import { loadProgress } from "../ProgressManager";
+import { COLOR_PRESETS, getSelectedColor, getSelectedColorIndex, setSelectedColorIndex, EYE, getEyeOffsetY } from "../PlayerConfig";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -62,19 +63,59 @@ export class TitleScene extends Phaser.Scene {
       color: "#ffffff",
     });
 
-    const playerSquare = this.add.rectangle(leftCenterX, height * 0.68, 32, 32, 0x4488ff);
-    playerSquare.setStrokeStyle(2, 0x66aaff);
+    const selectedColor = getSelectedColor();
+    const playerSquare = this.add.rectangle(leftCenterX, height * 0.68, 32, 32, selectedColor.fill);
+    playerSquare.setStrokeStyle(2, selectedColor.stroke);
+
+    const eyeOffsetY = getEyeOffsetY(32);
+    const leftEye = this.add.rectangle(
+      leftCenterX - EYE.SPACING, height * 0.68 + eyeOffsetY,
+      EYE.WIDTH, EYE.HEIGHT, 0x000000
+    );
+    const rightEye = this.add.rectangle(
+      leftCenterX + EYE.SPACING, height * 0.68 + eyeOffsetY,
+      EYE.WIDTH, EYE.HEIGHT, 0x000000
+    );
 
     this.tweens.add({
-      targets: playerSquare,
-      y: height * 0.68 - 10,
+      targets: [playerSquare, leftEye, rightEye],
+      y: `-=10`,
       duration: 600,
       yoyo: true,
       repeat: -1,
       ease: "Sine.easeInOut",
     });
 
-    const prompt = this.add.text(leftCenterX, height * 0.82, "Click a world to start!", {
+    const swatchY = height * 0.78;
+    const swatchSize = 20;
+    const swatchGap = 8;
+    const totalSwatchWidth = COLOR_PRESETS.length * swatchSize + (COLOR_PRESETS.length - 1) * swatchGap;
+    const swatchStartX = leftCenterX - totalSwatchWidth / 2 + swatchSize / 2;
+
+    const selectionIndicators: Phaser.GameObjects.Rectangle[] = [];
+
+    COLOR_PRESETS.forEach((preset, i) => {
+      const sx = swatchStartX + i * (swatchSize + swatchGap);
+      const isSelected = i === getSelectedColorIndex();
+
+      const indicator = this.add.rectangle(sx, swatchY, swatchSize + 6, swatchSize + 6, 0xffffff, isSelected ? 1 : 0);
+      selectionIndicators.push(indicator);
+
+      const swatch = this.add.rectangle(sx, swatchY, swatchSize, swatchSize, preset.fill);
+      swatch.setStrokeStyle(2, preset.stroke);
+      swatch.setInteractive({ useHandCursor: true });
+
+      swatch.on("pointerdown", () => {
+        setSelectedColorIndex(i);
+        playerSquare.setFillStyle(preset.fill);
+        playerSquare.setStrokeStyle(2, preset.stroke);
+        selectionIndicators.forEach((ind, j) => {
+          ind.setFillStyle(0xffffff, j === i ? 1 : 0);
+        });
+      });
+    });
+
+    const prompt = this.add.text(leftCenterX, height * 0.87, "Click a world to start!", {
       fontSize: "20px",
       fontFamily: "monospace",
       color: "#ffffff",
