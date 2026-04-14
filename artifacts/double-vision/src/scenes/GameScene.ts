@@ -28,7 +28,9 @@ export class GameScene extends Phaser.Scene {
   private waterTimers: Map<Phaser.GameObjects.Rectangle, number> = new Map();
   private sprayTimers: { sprite: Phaser.GameObjects.Rectangle; timer: number; active: boolean; baseY: number; gfx?: Phaser.GameObjects.Graphics; dome?: Phaser.GameObjects.Graphics }[] = [];
   private landslideData: { tile: Phaser.GameObjects.Rectangle; dir: number; speed: number; gfx: Phaser.GameObjects.Graphics; timer: number }[] = [];
-  private waveZones: { gfx: Phaser.GameObjects.Graphics; hitRect: Phaser.Geom.Rectangle; timer: number; baseX: number; baseY: number; color: number; alpha: number }[] = [];
+  private activeWaves: { gfx: Phaser.GameObjects.Graphics; x: number; y: number; targetX: number; speed: number; life: number; maxLife: number; catching: boolean }[] = [];
+  private waveSpawnTimer: number = 0;
+  private waveSpawnInterval: number = 2500;
   private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number }[] = [];
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
   private bullets: Phaser.Physics.Arcade.Group | null = null;
@@ -48,7 +50,9 @@ export class GameScene extends Phaser.Scene {
     this.waterTimers = new Map();
     this.sprayTimers = [];
     this.landslideData = [];
-    this.waveZones = [];
+    this.activeWaves = [];
+    this.waveSpawnTimer = 0;
+    this.waveSpawnInterval = 2500;
     this.vineSwings = [];
     this.tankPushers = [];
     this.bullets = null;
@@ -243,11 +247,6 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 1: {
-        const waveGfx = this.add.graphics();
-        const waveBaseX = px;
-        const waveBaseY = py - TILE;
-        const hitRect = new Phaser.Geom.Rectangle(waveBaseX - TILE, waveBaseY - TILE, TILE * 2, TILE * 2);
-        this.waveZones.push({ gfx: waveGfx, hitRect, timer: 0, baseX: waveBaseX, baseY: waveBaseY, color: world.movementColor, alpha: 0.3 });
         break;
       }
       case 2: {
