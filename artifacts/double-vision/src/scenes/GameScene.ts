@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } from "../worlds/WorldConfig";
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
+import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -40,6 +41,10 @@ export class GameScene extends Phaser.Scene {
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
   private bullets: Phaser.Physics.Arcade.Group | null = null;
   private bulletTimer: number = 0;
+  private isPaused: boolean = false;
+  private pauseContainer: Phaser.GameObjects.Container | null = null;
+  private pauseKey1!: Phaser.Input.Keyboard.Key;
+  private pauseKey2!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super({ key: "GameScene" });
@@ -51,6 +56,8 @@ export class GameScene extends Phaser.Scene {
     this.startTime = data.startTime;
     this.isDead = false;
     this.isDucking = false;
+    this.isPaused = false;
+    this.pauseContainer = null;
     this.checkpoints = [];
     this.waterTimers = new Map();
 
@@ -115,11 +122,33 @@ export class GameScene extends Phaser.Scene {
       duck: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
     };
 
+    this.pauseKey1 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.pauseKey2 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    const handlePause = () => this.togglePause();
+    this.pauseKey1.on("down", handlePause);
+    this.pauseKey2.on("down", handlePause);
+
+    this.events.on("shutdown", () => {
+      this.pauseKey1.off("down", handlePause);
+      this.pauseKey2.off("down", handlePause);
+    });
+
     this.worldText = this.add.text(16, 16, world.name, {
       fontSize: "16px",
       fontFamily: "monospace",
       color: "#ffffff",
     }).setScrollFactor(0).setDepth(100);
+
+    const pauseBtn = this.add.text(this.cameras.main.width / 2, 16, "[ || ]", {
+      fontSize: "16px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+      backgroundColor: "#0a0a1e",
+      padding: { x: 8, y: 4 },
+    }).setScrollFactor(0).setDepth(100).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+    pauseBtn.on("pointerover", () => pauseBtn.setColor("#ffffff"));
+    pauseBtn.on("pointerout", () => pauseBtn.setColor("#cccccc"));
+    pauseBtn.on("pointerdown", () => this.togglePause());
 
     this.deathText = this.add.text(784, 16, `Deaths: ${this.deaths}`, {
       fontSize: "16px",
@@ -344,6 +373,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    if (this.isPaused) return;
     if (this.isDead) return;
 
     if (this.player.y > 18 * TILE) {
@@ -878,14 +908,102 @@ export class GameScene extends Phaser.Scene {
   }
 
   private completeWorld() {
-    if (this.worldIndex >= WORLDS.length - 1) {
+    markWorldCompleted(this.worldIndex, this.deaths);
+    if (allWorldsCompleted()) {
       this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime });
     } else {
-      this.scene.start("WarningScene", {
-        worldIndex: this.worldIndex + 1,
-        deaths: this.deaths,
-        startTime: this.startTime,
-      });
+      this.scene.start("TitleScene");
     }
+  }
+
+  private togglePause() {
+    if (this.isPaused) {
+      this.unpause();
+    } else {
+      this.pause();
+    }
+  }
+
+  private pause() {
+    if (this.isPaused || this.isDead) return;
+    this.isPaused = true;
+    this.physics.world.pause();
+    this.tweens.pauseAll();
+
+    const { width, height } = this.cameras.main;
+    const scrollX = this.cameras.main.scrollX;
+    const scrollY = this.cameras.main.scrollY;
+    const cx = scrollX + width / 2;
+    const cy = scrollY + height / 2;
+
+    this.pauseContainer = this.add.container(cx, cy).setDepth(500);
+
+    const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
+    this.pauseContainer.add(overlay);
+
+    const titleText = this.add.text(0, -80, "PAUSED", {
+      fontSize: "42px",
+      fontFamily: "monospace",
+      color: "#ffffff",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.pauseContainer.add(titleText);
+
+    const btnW = 200;
+    const btnH = 44;
+    const buttons = [
+      { label: "Unpause", y: -10, action: () => this.unpause() },
+      { label: "Restart", y: 50, action: () => this.restartWorld() },
+      { label: "Home", y: 110, action: () => this.goHome() },
+    ];
+
+    buttons.forEach((btn) => {
+      const bg = this.add.rectangle(0, btn.y, btnW, btnH, 0x16213e, 0.95);
+      bg.setStrokeStyle(2, 0x0f3460);
+      bg.setInteractive({ useHandCursor: true });
+
+      const label = this.add.text(0, btn.y, btn.label, {
+        fontSize: "18px",
+        fontFamily: "monospace",
+        color: "#cccccc",
+      }).setOrigin(0.5);
+
+      bg.on("pointerover", () => {
+        bg.setFillStyle(0x1e2d4a, 1);
+        label.setColor("#ffffff");
+      });
+      bg.on("pointerout", () => {
+        bg.setFillStyle(0x16213e, 0.95);
+        label.setColor("#cccccc");
+      });
+      bg.on("pointerdown", btn.action);
+
+      this.pauseContainer!.add([bg, label]);
+    });
+  }
+
+  private unpause() {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+    this.physics.world.resume();
+    this.tweens.resumeAll();
+    if (this.pauseContainer) {
+      this.pauseContainer.destroy();
+      this.pauseContainer = null;
+    }
+  }
+
+  private restartWorld() {
+    this.isPaused = false;
+    this.physics.world.resume();
+    this.tweens.resumeAll();
+    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now() });
+  }
+
+  private goHome() {
+    this.isPaused = false;
+    this.physics.world.resume();
+    this.tweens.resumeAll();
+    this.scene.start("TitleScene");
   }
 }

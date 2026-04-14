@@ -21,21 +21,26 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifacts/double-vision/`.
 
 ### Game Structure
-- **4 themed worlds**: Lava, Beach, Jungle, War Zone
+- **4 themed worlds**: Lava, Beach, Jungle, War Zone (all unlocked from start)
 - Each world has unique kill blocks, spikes/hazards, and movement mechanics
 - 5 checkpoints per level, death respawn at last checkpoint
-- Win screen shows total deaths and elapsed time
+- Title screen has a world gallery on the right with completion indicators
+- Pause menu (ESC or P) with Unpause, Restart, Home buttons
+- Progress (completion, best deaths) persisted to localStorage
+- Completing a world returns to title; completing all 4 shows WinScene
 
 ### Controls
 - **Player 1**: W (jump), S (duck)
 - **Player 2**: Left/Right arrows (move)
+- **Pause**: Escape or P
 
 ### Key Files
 - `src/main.ts` - Phaser config and game initialization
-- `src/scenes/TitleScene.ts` - Title screen with controls
+- `src/ProgressManager.ts` - localStorage progress read/write (completion, deaths)
+- `src/scenes/TitleScene.ts` - Title screen with world gallery and controls
 - `src/scenes/WarningScene.ts` - Pre-world hazard warning
-- `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints
-- `src/scenes/WinScene.ts` - Victory screen with stats
+- `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints, pause menu
+- `src/scenes/WinScene.ts` - Victory screen with stats (shown when all 4 worlds complete)
 - `src/worlds/WorldConfig.ts` - World definitions and physics constants
 - `src/worlds/LevelGenerator.ts` - Procedural level generation
 

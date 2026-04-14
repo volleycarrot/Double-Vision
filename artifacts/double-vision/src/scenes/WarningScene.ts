@@ -12,6 +12,18 @@ export class WarningScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor(Phaser.Display.Color.IntegerToColor(world.bgColor).rgba);
 
+    const homeBtn = this.add.text(width - 16, 16, "[ Home ]", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+      backgroundColor: "#1a1a2e",
+      padding: { x: 8, y: 4 },
+    }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+
+    homeBtn.on("pointerover", () => homeBtn.setColor("#ffffff"));
+    homeBtn.on("pointerout", () => homeBtn.setColor("#cccccc"));
+    homeBtn.on("pointerdown", () => this.scene.start("TitleScene"));
+
     const worldNum = this.add.text(width / 2, height * 0.15, `WORLD ${data.worldIndex + 1}`, {
       fontSize: "20px",
       fontFamily: "monospace",
@@ -27,16 +39,27 @@ export class WarningScene extends Phaser.Scene {
     });
     title.setOrigin(0.5);
 
+    const hazardEmojis: string[][] = [
+      ["🔥", "🌋", "🪨"],
+      ["💧", "🦔", "🌊"],
+      ["⏳", "🌿", "🌱"],
+      ["💣", "🪡", "🪖"],
+    ];
+
+    const emojis = hazardEmojis[data.worldIndex] || ["⬛", "⬛", "⬛"];
+
     const hazards = [
-      { name: world.killBlockName, color: world.killBlockColor, desc: "Instant Kill" },
-      { name: world.spikeName, color: world.spikeColor, desc: "Hazard" },
-      { name: world.movementName, color: world.movementColor, desc: "Movement" },
+      { name: world.killBlockName, color: world.killBlockColor, desc: "Instant Kill", emoji: emojis[0] },
+      { name: world.spikeName, color: world.spikeColor, desc: "Hazard", emoji: emojis[1] },
+      { name: world.movementName, color: world.movementColor, desc: "Movement", emoji: emojis[2] },
     ];
 
     const startY = height * 0.45;
     hazards.forEach((h, i) => {
       const y = startY + i * 50;
-      this.add.rectangle(width / 2 - 120, y, 24, 24, h.color);
+      this.add.text(width / 2 - 128, y, h.emoji, {
+        fontSize: "22px",
+      }).setOrigin(0.5, 0.5);
       this.add.text(width / 2 - 100, y, h.name, {
         fontSize: "16px",
         fontFamily: "monospace",
