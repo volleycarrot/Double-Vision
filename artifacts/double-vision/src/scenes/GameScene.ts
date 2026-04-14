@@ -27,7 +27,7 @@ export class GameScene extends Phaser.Scene {
   private worldText!: Phaser.GameObjects.Text;
   private waterTimers: Map<Phaser.GameObjects.Rectangle, number> = new Map();
   private sprayTimers: { sprite: Phaser.GameObjects.Rectangle; timer: number; active: boolean; baseY: number }[] = [];
-  private waveZones: { rect: Phaser.GameObjects.Rectangle; timer: number }[] = [];
+  private waveZones: { gfx: Phaser.GameObjects.Graphics; hitRect: Phaser.Geom.Rectangle; timer: number; baseX: number; baseY: number; color: number; alpha: number }[] = [];
   private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number }[] = [];
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
   private bullets: Phaser.Physics.Arcade.Group | null = null;
@@ -219,8 +219,11 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 1: {
-        const wave = this.add.rectangle(px, py - TILE, TILE * 2, TILE * 2, world.movementColor, 0.3);
-        this.waveZones.push({ rect: wave, timer: 0 });
+        const waveGfx = this.add.graphics();
+        const waveBaseX = px;
+        const waveBaseY = py - TILE;
+        const hitRect = new Phaser.Geom.Rectangle(waveBaseX - TILE, waveBaseY - TILE, TILE * 2, TILE * 2);
+        this.waveZones.push({ gfx: waveGfx, hitRect, timer: 0, baseX: waveBaseX, baseY: waveBaseY, color: world.movementColor, alpha: 0.3 });
         break;
       }
       case 2: {
@@ -356,11 +359,47 @@ export class GameScene extends Phaser.Scene {
     const playerBounds = this.player.getBounds();
     this.waveZones.forEach((w) => {
       w.timer += delta;
-      const waveX = Math.sin(w.timer * 0.002) * 3;
-      w.rect.x += waveX;
-      const waveBounds = w.rect.getBounds();
-      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, waveBounds)) {
-        this.player.body.setVelocityX(this.player.body.velocity.x + PHYSICS.WAVE_SPEED * 0.05);
+      const sway = Math.sin(w.timer * 0.003) * 10;
+
+      w.gfx.clear();
+      const waveWidth = TILE * 2;
+      const waveHeight = TILE * 2;
+      const cx = w.baseX + sway;
+      const cy = w.baseY;
+      const left = cx - waveWidth / 2;
+      const top = cy - waveHeight / 2;
+
+      w.gfx.fillStyle(w.color, w.alpha);
+      w.gfx.beginPath();
+      w.gfx.moveTo(left, top + waveHeight);
+      const segments = 20;
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const sx = left + t * waveWidth;
+        const amp = 6 + Math.sin(w.timer * 0.004 + t * Math.PI * 2) * 3;
+        const sy = top + Math.sin(w.timer * 0.005 + t * Math.PI * 3) * amp;
+        w.gfx.lineTo(sx, sy);
+      }
+      w.gfx.lineTo(left + waveWidth, top + waveHeight);
+      w.gfx.closePath();
+      w.gfx.fillPath();
+
+      w.gfx.lineStyle(2, w.color, w.alpha + 0.2);
+      w.gfx.beginPath();
+      w.gfx.moveTo(left, top + waveHeight * 0.3);
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const sx = left + t * waveWidth;
+        const sy = top + waveHeight * 0.3 + Math.sin(w.timer * 0.006 + t * Math.PI * 2.5) * 5;
+        w.gfx.lineTo(sx, sy);
+      }
+      w.gfx.strokePath();
+
+      w.hitRect.x = cx - waveWidth / 2;
+      w.hitRect.y = cy - waveHeight / 2;
+
+      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, w.hitRect)) {
+        this.player.body.setVelocityX(this.player.body.velocity.x + PHYSICS.WAVE_SPEED * 0.45);
       }
     });
   }
