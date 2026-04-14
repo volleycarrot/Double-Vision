@@ -125,7 +125,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.worldIndex === 1) {
-      this.oceanGfx = this.add.graphics().setDepth(45).setScrollFactor(0);
+      this.oceanGfx = this.add.graphics().setDepth(55).setScrollFactor(0);
     }
   }
 
