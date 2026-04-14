@@ -438,69 +438,83 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateWaves(delta: number) {
-    const playerBounds = this.player.getBounds();
-    this.waveZones.forEach((w) => {
-      w.timer += delta;
-      const sweepCycle = (w.timer * 0.001) % 1;
-      const sway = Math.sin(w.timer * 0.003) * 14;
+    this.waveSpawnTimer += delta;
+    if (this.waveSpawnTimer >= this.waveSpawnInterval) {
+      this.waveSpawnTimer = 0;
+      this.waveSpawnInterval = 2000 + Math.random() * 3000;
+      this.spawnWave();
+    }
 
-      w.gfx.clear();
-      const waveW = TILE * 3;
+    const playerBounds = this.player.getBounds();
+    for (let i = this.activeWaves.length - 1; i >= 0; i--) {
+      const w = this.activeWaves[i];
+      w.life += delta;
+
+      const progress = Math.min(w.life / w.maxLife, 1);
+      w.x += w.speed * (delta / 1000);
+
+      const waveW = TILE * 4;
       const waveH = TILE * 3;
-      const cx = w.baseX + sway;
-      const cy = w.baseY;
+      const cx = w.x;
+      const cy = w.y;
       const left = cx - waveW / 2;
       const top = cy - waveH / 2;
       const bottom = top + waveH;
       const segments = 24;
 
-      w.gfx.fillStyle(0x005f8f, 0.55);
+      const fadeIn = Math.min(w.life / 500, 1);
+      const fadeOut = progress > 0.85 ? 1 - (progress - 0.85) / 0.15 : 1;
+      const alpha = fadeIn * fadeOut;
+
+      w.gfx.clear();
+
+      w.gfx.fillStyle(0x005f8f, 0.55 * alpha);
       w.gfx.beginPath();
       w.gfx.moveTo(left, bottom);
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
+      for (let s = 0; s <= segments; s++) {
+        const t = s / segments;
         const sx = left + t * waveW;
         const baseAmp = 10 + Math.sin(t * Math.PI) * 8;
-        const sy = top + waveH * 0.3 + Math.sin(w.timer * 0.004 + t * Math.PI * 2) * baseAmp;
+        const sy = top + waveH * 0.3 + Math.sin(w.life * 0.004 + t * Math.PI * 2) * baseAmp;
         w.gfx.lineTo(sx, sy);
       }
       w.gfx.lineTo(left + waveW, bottom);
       w.gfx.closePath();
       w.gfx.fillPath();
 
-      w.gfx.fillStyle(0x0088cc, 0.7);
+      w.gfx.fillStyle(0x0088cc, 0.7 * alpha);
       w.gfx.beginPath();
       w.gfx.moveTo(left, bottom);
-      for (let i = 0; i <= segments; i++) {
-        const t = i / segments;
+      for (let s = 0; s <= segments; s++) {
+        const t = s / segments;
         const sx = left + t * waveW;
         const curlFactor = Math.pow(Math.sin(t * Math.PI), 2);
         const crestH = 14 * curlFactor;
         const sy = top + waveH * 0.35
-          + Math.sin(w.timer * 0.005 + t * Math.PI * 2.5) * (6 + crestH)
-          - crestH * Math.sin(w.timer * 0.003);
+          + Math.sin(w.life * 0.005 + t * Math.PI * 2.5) * (6 + crestH)
+          - crestH * Math.sin(w.life * 0.003);
         w.gfx.lineTo(sx, sy);
       }
       w.gfx.lineTo(left + waveW, bottom);
       w.gfx.closePath();
       w.gfx.fillPath();
 
-      w.gfx.fillStyle(0x00bbff, 0.8);
+      w.gfx.fillStyle(0x00bbff, 0.8 * alpha);
       w.gfx.beginPath();
-      const crestStart = 0.2;
-      const crestEnd = 0.7;
+      const crestStart = 0.15;
+      const crestEnd = 0.65;
       const crestBaseY = top + waveH * 0.28;
       w.gfx.moveTo(left + crestStart * waveW, crestBaseY + 10);
-      for (let i = 0; i <= 16; i++) {
-        const t = crestStart + (i / 16) * (crestEnd - crestStart);
+      for (let s = 0; s <= 16; s++) {
+        const t = crestStart + (s / 16) * (crestEnd - crestStart);
         const sx = left + t * waveW;
         const curl = Math.sin((t - crestStart) / (crestEnd - crestStart) * Math.PI);
-        const sy = crestBaseY - curl * 16 * Math.abs(Math.sin(w.timer * 0.004))
-          + Math.sin(w.timer * 0.007 + t * 8) * 2;
+        const sy = crestBaseY - curl * 18 * Math.abs(Math.sin(w.life * 0.004))
+          + Math.sin(w.life * 0.007 + t * 8) * 2;
         w.gfx.lineTo(sx, sy);
       }
-      for (let i = 16; i >= 0; i--) {
-        const t = crestStart + (i / 16) * (crestEnd - crestStart);
+      for (let s = 16; s >= 0; s--) {
+        const t = crestStart + (s / 16) * (crestEnd - crestStart);
         const sx = left + t * waveW;
         const curl = Math.sin((t - crestStart) / (crestEnd - crestStart) * Math.PI);
         const sy = crestBaseY + 4 - curl * 6;
@@ -509,35 +523,68 @@ export class GameScene extends Phaser.Scene {
       w.gfx.closePath();
       w.gfx.fillPath();
 
-      w.gfx.fillStyle(0xffffff, 0.6);
-      for (let i = 0; i < 5; i++) {
-        const ft = crestStart + 0.05 + (i / 5) * (crestEnd - crestStart - 0.1);
+      w.gfx.fillStyle(0xffffff, 0.6 * alpha);
+      for (let f = 0; f < 6; f++) {
+        const ft = crestStart + 0.05 + (f / 6) * (crestEnd - crestStart - 0.1);
         const fx = left + ft * waveW;
-        const foamY = crestBaseY - Math.sin((ft - crestStart) / (crestEnd - crestStart) * Math.PI) * 10
-          + Math.sin(w.timer * 0.008 + i * 2) * 3;
-        const foamSize = 2 + Math.sin(w.timer * 0.006 + i) * 1.5;
+        const foamY = crestBaseY - Math.sin((ft - crestStart) / (crestEnd - crestStart) * Math.PI) * 12
+          + Math.sin(w.life * 0.008 + f * 2) * 3;
+        const foamSize = 2.5 + Math.sin(w.life * 0.006 + f) * 1.5;
         w.gfx.fillCircle(fx, foamY, foamSize);
       }
 
-      w.gfx.lineStyle(1.5, 0xffffff, 0.35);
+      w.gfx.lineStyle(1.5, 0xffffff, 0.35 * alpha);
       w.gfx.beginPath();
       w.gfx.moveTo(left + waveW * 0.1, top + waveH * 0.55);
-      for (let i = 0; i <= 12; i++) {
-        const t = i / 12;
+      for (let s = 0; s <= 12; s++) {
+        const t = s / 12;
         const sx = left + waveW * 0.1 + t * waveW * 0.8;
-        const sy = top + waveH * 0.55 + Math.sin(w.timer * 0.006 + t * Math.PI * 3) * 4;
+        const sy = top + waveH * 0.55 + Math.sin(w.life * 0.006 + t * Math.PI * 3) * 4;
         w.gfx.lineTo(sx, sy);
       }
       w.gfx.strokePath();
 
-      w.hitRect.x = cx - waveW / 2;
-      w.hitRect.y = cy - waveH / 2;
-      w.hitRect.width = waveW;
-      w.hitRect.height = waveH;
-
-      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, w.hitRect)) {
-        this.player.body.setVelocityX(this.player.body.velocity.x + PHYSICS.WAVE_SPEED * 0.8);
+      const hitRect = new Phaser.Geom.Rectangle(cx - waveW / 2, cy - waveH / 2, waveW, waveH);
+      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, hitRect)) {
+        w.catching = true;
+        this.player.body.setVelocityX(w.speed * 0.9);
+        this.player.body.setVelocityY(Math.min(this.player.body.velocity.y, -20));
+      } else {
+        w.catching = false;
       }
+
+      if (w.life >= w.maxLife) {
+        w.gfx.destroy();
+        this.activeWaves.splice(i, 1);
+      }
+    }
+  }
+
+  private spawnWave() {
+    const camX = this.cameras.main.scrollX;
+    const camW = this.cameras.main.width;
+
+    const fromLeft = Math.random() > 0.5;
+    const startX = fromLeft ? camX - TILE * 5 : camX + camW + TILE * 5;
+    const travelDist = (camW + TILE * 12) * (fromLeft ? 1 : -1);
+    const speed = (fromLeft ? 1 : -1) * (PHYSICS.WAVE_SPEED * (0.7 + Math.random() * 0.6));
+    const targetX = startX + travelDist;
+    const maxLife = Math.abs(travelDist / speed) * 1000;
+
+    const groundLevel = (13 - 2) * TILE;
+    const y = groundLevel - TILE + Math.random() * TILE;
+
+    const gfx = this.add.graphics().setDepth(50);
+
+    this.activeWaves.push({
+      gfx,
+      x: startX,
+      y,
+      targetX,
+      speed,
+      life: 0,
+      maxLife,
+      catching: false,
     });
   }
 
