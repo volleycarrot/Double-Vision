@@ -165,10 +165,34 @@ export class GameScene extends Phaser.Scene {
         }
         case "kill": {
           if (this.worldIndex === 1) {
-            const k = this.add.rectangle(px, py - TILE, TILE, TILE, world.killBlockColor, 0.7);
+            const finGfx = this.add.graphics();
+            finGfx.fillStyle(0x555555, 1);
+            const finH = TILE * 1.3;
+            const finW = TILE * 0.8;
+            const baseY = py;
+            const tipX = px;
+            const tipY = baseY - finH;
+            finGfx.fillTriangle(
+              tipX - finW * 0.15, baseY,
+              tipX, tipY,
+              tipX + finW * 0.85, baseY
+            );
+            finGfx.fillStyle(0x444444, 1);
+            finGfx.fillTriangle(
+              tipX, tipY,
+              tipX + finW * 0.85, baseY,
+              tipX + finW * 0.3, baseY
+            );
+            const tipH = finH * 0.2;
+            finGfx.fillStyle(0xffffff, 0.9);
+            finGfx.fillTriangle(
+              tipX - finW * 0.05, baseY - finH + tipH,
+              tipX, tipY,
+              tipX + finW * 0.25, baseY - finH + tipH
+            );
+            const k = this.add.rectangle(px, py - finH / 2, TILE, finH, 0x000000, 0);
             this.killGroup.add(k);
-            (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
-            this.waterTimers.set(k, 0);
+            (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, finH);
           } else if (this.worldIndex === 0) {
             const puddleH = 10;
             const puddleY = py - TILE / 2;

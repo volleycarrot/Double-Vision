@@ -32,7 +32,7 @@ export const WORLDS: WorldConfig[] = [
     groundColor: 0xd2b48c,
     platformColor: 0xc2a47c,
     killBlockName: "Water Block",
-    killBlockColor: 0x0077be,
+    killBlockColor: 0x005f99,
     spikeName: "Sea Urchin",
     spikeColor: 0x2d1b3d,
     movementName: "Wave",
