@@ -17,7 +17,8 @@ function seededRandom(seed: number) {
 
 export function generateLevel(worldIndex: number): LevelTile[] {
   const tiles: LevelTile[] = [];
-  const rand = seededRandom(worldIndex * 1000 + 42);
+  const baseSeed = Math.floor(Math.random() * 2147483646) + 1;
+  const rand = seededRandom(baseSeed);
   const checkpointSpacing = Math.floor(LEVEL_WIDTH / (CHECKPOINT_COUNT + 1));
 
   const groundLevel = LEVEL_HEIGHT - 2;
@@ -121,7 +122,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
   }
 
   if (isLavaWorld) {
-    const conveyorRand = seededRandom(worldIndex * 1000 + 9999);
+    const conveyorRand = seededRandom(baseSeed + 9999);
     let cx = 8;
     while (cx < LEVEL_WIDTH - 8) {
       const sectionIndex = Math.floor(cx / checkpointSpacing);
@@ -149,7 +150,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
       cx++;
     }
 
-    const caveRand = seededRandom(worldIndex * 1000 + 7777);
+    const caveRand = seededRandom(baseSeed + 7777);
     let caveX = 15;
     while (caveX < LEVEL_WIDTH - 10) {
       const sectionIndex = Math.floor(caveX / checkpointSpacing);
