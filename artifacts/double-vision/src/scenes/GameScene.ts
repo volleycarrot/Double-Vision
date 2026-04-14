@@ -216,10 +216,27 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 1: {
-        const shard = this.add.triangle(px, py, 0, 12, 6, 0, 12, 12, world.spikeColor);
-        shard.setStrokeStyle(1, 0xffffff, 0.5);
-        this.spikeGroup.add(shard);
-        (shard.body as Phaser.Physics.Arcade.Body).setSize(12, 12);
+        const urchinGfx = this.add.graphics();
+        const radius = 7;
+        const spikeLen = 5;
+        const numSpikes = 10;
+        urchinGfx.fillStyle(world.spikeColor, 1);
+        urchinGfx.fillCircle(px, py, radius);
+        urchinGfx.fillStyle(0x1a0a2e, 1);
+        urchinGfx.fillCircle(px, py, radius - 2);
+        urchinGfx.lineStyle(1.5, 0x3d1f56, 1);
+        for (let i = 0; i < numSpikes; i++) {
+          const angle = (i / numSpikes) * Math.PI * 2;
+          const x1 = px + Math.cos(angle) * radius;
+          const y1 = py + Math.sin(angle) * radius;
+          const x2 = px + Math.cos(angle) * (radius + spikeLen);
+          const y2 = py + Math.sin(angle) * (radius + spikeLen);
+          urchinGfx.lineBetween(x1, y1, x2, y2);
+        }
+        const hitRadius = radius + spikeLen;
+        const urchinHitbox = this.add.rectangle(px, py, hitRadius * 2, hitRadius * 2, 0x000000, 0);
+        this.spikeGroup.add(urchinHitbox);
+        (urchinHitbox.body as Phaser.Physics.Arcade.Body).setCircle(hitRadius, 0, 0);
         break;
       }
       case 2: {
