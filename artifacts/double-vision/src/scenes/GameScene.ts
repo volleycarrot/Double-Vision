@@ -38,7 +38,7 @@ export class GameScene extends Phaser.Scene {
   private waveSpawnInterval: number = 2500;
   private oceanGfx: Phaser.GameObjects.Graphics | null = null;
   private oceanTimer: number = 0;
-  private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number }[] = [];
+  private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number }[] = [];
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
   private bullets: Phaser.Physics.Arcade.Group | null = null;
   private bulletTimer: number = 0;
@@ -107,6 +107,8 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.caveGroup);
 
     this.physics.add.overlap(this.player, this.killGroup, (_p, _kill) => {
+      const killBlock = _kill as Phaser.GameObjects.Rectangle;
+      if (this.waterTimers.has(killBlock)) return;
       this.handleDeath();
     }, undefined, this);
     this.physics.add.overlap(this.player, this.spikeGroup, (_p, spike) => {
@@ -243,6 +245,30 @@ export class GameScene extends Phaser.Scene {
               const color = speckRng(i + 30) > 0.5 ? 0xffdd00 : 0xffee55;
               speckleGfx.fillStyle(color, 0.8);
               speckleGfx.fillCircle(sx, sy, size);
+            }
+          } else if (this.worldIndex === 2) {
+            const sandH = 12;
+            const sandY = py - TILE / 2;
+            const k = this.add.rectangle(px, sandY, TILE, sandH, 0xc9a84c, 0);
+            this.killGroup.add(k);
+            (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, sandH);
+            this.waterTimers.set(k, 0);
+
+            const sandGfx = this.add.graphics();
+            sandGfx.fillStyle(0xc9a84c, 0.85);
+            sandGfx.fillRect(px - TILE / 2, sandY - sandH / 2, TILE, sandH);
+            sandGfx.fillStyle(0xb8963e, 0.6);
+            sandGfx.fillEllipse(px, sandY - 1, TILE - 2, sandH - 2);
+            sandGfx.fillStyle(0xdabb6e, 0.5);
+            sandGfx.fillEllipse(px, sandY + 1, TILE - 6, sandH - 4);
+            const sandSeed = (tile.x * 61 + tile.y * 113) % 1000;
+            const sandRng = (i: number) => ((sandSeed + i * 271) % 1000) / 1000;
+            for (let i = 0; i < 6; i++) {
+              const sx = px - TILE / 2 + 2 + sandRng(i) * (TILE - 4);
+              const sy = sandY - sandH / 2 + 2 + sandRng(i + 10) * (sandH - 4);
+              const dotSize = 0.8 + sandRng(i + 20) * 1.2;
+              sandGfx.fillStyle(sandRng(i + 30) > 0.5 ? 0xa07830 : 0xd4a84a, 0.7);
+              sandGfx.fillCircle(sx, sy, dotSize);
             }
           } else {
             const k = this.add.rectangle(px, py, TILE, TILE, world.killBlockColor);
@@ -421,10 +447,31 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 2: {
-        const thorn = this.add.rectangle(px, py, 20, 20, world.spikeColor);
-        thorn.setStrokeStyle(2, 0x1a4010);
-        this.spikeGroup.add(thorn);
-        (thorn.body as Phaser.Physics.Arcade.Body).setSize(20, 20);
+        const flowerGfx = this.add.graphics();
+        const flowerY = py - 4;
+        const petalColors = [0x9b30ff, 0xff1493, 0xffdd00, 0xcc22cc, 0xff69b4];
+        const petalCount = 5;
+        const petalR = 7;
+        for (let i = 0; i < petalCount; i++) {
+          const angle = (i / petalCount) * Math.PI * 2 - Math.PI / 2;
+          const petalX = px + Math.cos(angle) * 6;
+          const petalY = flowerY + Math.sin(angle) * 6;
+          flowerGfx.fillStyle(petalColors[i], 0.9);
+          flowerGfx.fillEllipse(petalX, petalY, petalR, petalR * 1.4);
+        }
+        flowerGfx.fillStyle(0xffff00, 1);
+        flowerGfx.fillCircle(px, flowerY, 4);
+        flowerGfx.fillStyle(0xffaa00, 0.8);
+        flowerGfx.fillCircle(px, flowerY, 2);
+
+        flowerGfx.fillStyle(0x228b22, 1);
+        flowerGfx.fillRect(px - 1.5, flowerY + 8, 3, 10);
+        flowerGfx.fillStyle(0x2eaa2e, 0.9);
+        flowerGfx.fillEllipse(px + 5, flowerY + 12, 6, 3);
+
+        const flowerHit = this.add.rectangle(px, flowerY, 18, 18, 0x000000, 0);
+        this.spikeGroup.add(flowerHit);
+        (flowerHit.body as Phaser.Physics.Arcade.Body).setSize(18, 18);
         break;
       }
       case 3: {
@@ -462,11 +509,14 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 2: {
-        const vine = this.add.rectangle(px, py - TILE * 3, 6, TILE * 2, world.movementColor);
-        const platform = this.add.rectangle(px, py - TILE, TILE, 8, 0x8b4513);
-        this.platformGroup.add(platform);
-        (platform.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, 8);
-        this.vineSwings.push({ pivot: vine, platform, angle: 0, baseX: px });
+        const vAnchorY = py - TILE * 5;
+        const vRopeLen = TILE * 4;
+        const vineGfx = this.add.graphics();
+        vineGfx.fillStyle(0x3b2a10, 1);
+        vineGfx.fillRect(px - TILE / 2, vAnchorY - 4, TILE, 8);
+        const vine = this.add.rectangle(px, vAnchorY + vRopeLen / 2, 4, vRopeLen, 0x228b22);
+        const grabZone = this.add.rectangle(px, vAnchorY + vRopeLen - TILE / 2, TILE, TILE, 0x000000, 0);
+        this.vineSwings.push({ pivot: vine, platform: grabZone, angle: Math.random() * Math.PI * 2, baseX: px, anchorY: vAnchorY, ropeLen: vRopeLen });
         break;
       }
       case 3: {
@@ -551,6 +601,7 @@ export class GameScene extends Phaser.Scene {
         this.updateWaves(delta);
         break;
       case 2:
+        this.updateWaterBlock(delta);
         this.updateVineSwings(delta);
         break;
       case 3:
@@ -959,12 +1010,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateVineSwings(delta: number) {
+    const playerBounds = this.player.getBounds();
     this.vineSwings.forEach((v) => {
-      v.angle += delta * 0.002;
-      const offsetX = Math.sin(v.angle) * PHYSICS.VINE_SWING_RANGE;
-      v.pivot.x = v.baseX + offsetX;
-      v.platform.x = v.baseX + offsetX;
-      (v.platform.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      v.angle += delta * 0.0025;
+      const swingAngle = Math.sin(v.angle) * 0.6;
+
+      const endX = v.baseX + Math.sin(swingAngle) * v.ropeLen;
+      const endY = v.anchorY + Math.cos(swingAngle) * v.ropeLen;
+
+      const midX = v.baseX + Math.sin(swingAngle) * v.ropeLen / 2;
+      const midY = v.anchorY + Math.cos(swingAngle) * v.ropeLen / 2;
+      v.pivot.setPosition(midX, midY);
+      v.pivot.setRotation(swingAngle);
+
+      v.platform.setPosition(endX, endY);
+
+      const grabBounds = new Phaser.Geom.Rectangle(endX - TILE / 2, endY - TILE / 2, TILE, TILE);
+      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, grabBounds)) {
+        const angularVel = Math.cos(v.angle) * 0.0025;
+        const swingVelX = angularVel * Math.cos(swingAngle) * v.ropeLen;
+        this.player.body.setVelocityX(swingVelX * 280);
+        this.player.body.setVelocityY(Math.min(this.player.body.velocity.y, -80));
+      }
     });
   }
 

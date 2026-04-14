@@ -42,7 +42,7 @@ export class WarningScene extends Phaser.Scene {
     const hazardEmojis: string[][] = [
       ["🔥", "🌋", "🪨"],
       ["💧", "🦔", "🌊"],
-      ["⏳", "🌿", "🌱"],
+      ["⏳", "🌺", "🌿"],
       ["💣", "🪡", "🪖"],
     ];
 
