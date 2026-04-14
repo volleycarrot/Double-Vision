@@ -25,8 +25,10 @@ export function generateLevel(worldIndex: number): LevelTile[] {
 
   const hazardOccupied = new Set<number>();
   const noGroundColumns = new Set<number>();
+  const quicksandColumns = new Set<number>();
   const isLavaWorld = worldIndex === 0;
   const isBeachWorld = worldIndex === 1;
+  const isJungleWorld = worldIndex === 2;
 
   for (let x = 0; x < LEVEL_WIDTH; x++) {
     const sectionIndex = Math.floor(x / checkpointSpacing);
@@ -88,8 +90,29 @@ export function generateLevel(worldIndex: number): LevelTile[] {
 
       if (rand() < 0.06 + difficulty * 0.08) {
         if (!hazardOccupied.has(x)) {
-          tiles.push({ x, y: groundLevel, type: "kill" });
-          hazardOccupied.add(x);
+          if (isJungleWorld) {
+            const patchWidth = 1 + Math.floor(rand() * 3);
+            let canPlace = true;
+            for (let p = 0; p < patchWidth; p++) {
+              const col = x + p;
+              if (col >= LEVEL_WIDTH - 5 || hazardOccupied.has(col) || noGroundColumns.has(col)) {
+                canPlace = false;
+                break;
+              }
+            }
+            if (canPlace) {
+              for (let p = 0; p < patchWidth; p++) {
+                tiles.push({ x: x + p, y: groundLevel, type: "kill" });
+                hazardOccupied.add(x + p);
+                quicksandColumns.add(x + p);
+              }
+              if (x - 1 >= 0) hazardOccupied.add(x - 1);
+              if (x + patchWidth < LEVEL_WIDTH) hazardOccupied.add(x + patchWidth);
+            }
+          } else {
+            tiles.push({ x, y: groundLevel, type: "kill" });
+            hazardOccupied.add(x);
+          }
         }
       }
 
@@ -211,13 +234,25 @@ export function generateLevel(worldIndex: number): LevelTile[] {
   const clearRadius = 2;
   const checkpointXs = tiles.filter(t => t.type === "checkpoint").map(t => t.x);
   const hazardTypes = new Set(["kill", "spike", "movement"]);
-  return tiles.filter(t => {
+  const filtered = tiles.filter(t => {
     if (!hazardTypes.has(t.type)) return true;
     for (const cpx of checkpointXs) {
       const tileEndX = t.width ? t.x + t.width - 1 : t.x;
       if (t.x <= cpx + clearRadius && tileEndX >= cpx - clearRadius) {
+        if (t.type === "kill" && quicksandColumns.has(t.x)) {
+          quicksandColumns.delete(t.x);
+        }
         return false;
       }
+    }
+    return true;
+  });
+  return filtered.filter(t => {
+    if (t.type === "ground" && t.y === groundLevel && quicksandColumns.has(t.x)) {
+      return false;
+    }
+    if (t.type === "platform" && quicksandColumns.has(t.x) && t.y > groundLevel - 3) {
+      return false;
     }
     return true;
   });

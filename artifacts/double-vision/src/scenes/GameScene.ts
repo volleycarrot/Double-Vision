@@ -29,6 +29,7 @@ export class GameScene extends Phaser.Scene {
   private deathText!: Phaser.GameObjects.Text;
   private worldText!: Phaser.GameObjects.Text;
   private waterTimers: Map<Phaser.GameObjects.Rectangle, number> = new Map();
+  private quicksandContactTimer: number = 0;
 
   private lavaSplashParticles: { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; color: number; groundY: number }[] = [];
   private lavaSplashGfx: Phaser.GameObjects.Graphics | null = null;
@@ -66,6 +67,7 @@ export class GameScene extends Phaser.Scene {
     this.pauseContainer = null;
     this.checkpoints = [];
     this.waterTimers = new Map();
+    this.quicksandContactTimer = 0;
 
     this.lavaSplashParticles = [];
     this.lavaSplashGfx = null;
@@ -258,27 +260,27 @@ export class GameScene extends Phaser.Scene {
               speckleGfx.fillCircle(sx, sy, size);
             }
           } else if (this.worldIndex === 2) {
-            const sandH = 12;
-            const sandY = py - TILE / 2;
-            const k = this.add.rectangle(px, sandY, TILE, sandH, 0xc9a84c, 0);
+            const k = this.add.rectangle(px, py, TILE, TILE, 0xc9a84c, 0);
             this.killGroup.add(k);
-            (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, sandH);
+            (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
             this.waterTimers.set(k, 0);
 
             const sandGfx = this.add.graphics();
-            sandGfx.fillStyle(0xc9a84c, 0.85);
-            sandGfx.fillRect(px - TILE / 2, sandY - sandH / 2, TILE, sandH);
-            sandGfx.fillStyle(0xb8963e, 0.6);
-            sandGfx.fillEllipse(px, sandY - 1, TILE - 2, sandH - 2);
-            sandGfx.fillStyle(0xdabb6e, 0.5);
-            sandGfx.fillEllipse(px, sandY + 1, TILE - 6, sandH - 4);
+            const left = px - TILE / 2;
+            const top = py - TILE / 2;
+            sandGfx.fillStyle(0xc9a84c, 1.0);
+            sandGfx.fillRect(left, top, TILE, TILE);
+            sandGfx.fillStyle(0xb8963e, 0.5);
+            sandGfx.fillRect(left, top, TILE, TILE * 0.35);
+            sandGfx.fillStyle(0xd4b464, 0.4);
+            sandGfx.fillRect(left, top + TILE * 0.6, TILE, TILE * 0.4);
             const sandSeed = (tile.x * 61 + tile.y * 113) % 1000;
             const sandRng = (i: number) => ((sandSeed + i * 271) % 1000) / 1000;
-            for (let i = 0; i < 6; i++) {
-              const sx = px - TILE / 2 + 2 + sandRng(i) * (TILE - 4);
-              const sy = sandY - sandH / 2 + 2 + sandRng(i + 10) * (sandH - 4);
-              const dotSize = 0.8 + sandRng(i + 20) * 1.2;
-              sandGfx.fillStyle(sandRng(i + 30) > 0.5 ? 0xa07830 : 0xd4a84a, 0.7);
+            for (let i = 0; i < 14; i++) {
+              const sx = left + 1 + sandRng(i) * (TILE - 2);
+              const sy = top + 1 + sandRng(i + 10) * (TILE - 2);
+              const dotSize = 0.6 + sandRng(i + 20) * 1.4;
+              sandGfx.fillStyle(sandRng(i + 30) > 0.5 ? 0xa07830 : 0xd4a84a, 0.6);
               sandGfx.fillCircle(sx, sy, dotSize);
             }
           } else {
@@ -589,6 +591,8 @@ export class GameScene extends Phaser.Scene {
         this.vineGrabGfx.fillStyle(0xffd700, 1);
         this.vineGrabGfx.fillCircle(this.player.x, this.player.y - 16, 5);
       }
+    } else if (this.quicksandContactTimer > 0) {
+      this.player.body.setVelocityX(0);
     } else {
       let moveX = 0;
       if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
@@ -816,21 +820,27 @@ export class GameScene extends Phaser.Scene {
 
   private updateWaterBlock(delta: number) {
     const playerBounds = this.player.getBounds();
-    let inWater = false;
-    this.waterTimers.forEach((timer, block) => {
+    let inQuicksand = false;
+    this.waterTimers.forEach((_timer, block) => {
       const blockBounds = block.getBounds();
       if (Phaser.Geom.Rectangle.Overlaps(playerBounds, blockBounds)) {
-        inWater = true;
-        const newTimer = timer + delta;
-        this.waterTimers.set(block, newTimer);
-        this.player.body.setVelocityY(this.player.body.velocity.y + PHYSICS.QUICKSAND_SINK);
-        if (newTimer > 1500) {
-          this.handleDeath();
-        }
-      } else {
-        this.waterTimers.set(block, 0);
+        inQuicksand = true;
       }
     });
+    if (inQuicksand) {
+      this.quicksandContactTimer += delta;
+      this.player.body.setVelocityX(0);
+      this.player.body.setVelocityY(PHYSICS.QUICKSAND_SINK);
+      this.player.body.setAllowGravity(false);
+      if (this.quicksandContactTimer > 1000) {
+        this.handleDeath();
+      }
+    } else {
+      if (this.quicksandContactTimer > 0) {
+        this.player.body.setAllowGravity(true);
+      }
+      this.quicksandContactTimer = 0;
+    }
   }
 
   private updateWaves(delta: number) {
