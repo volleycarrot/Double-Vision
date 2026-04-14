@@ -31,6 +31,8 @@ export class GameScene extends Phaser.Scene {
   private activeWaves: { gfx: Phaser.GameObjects.Graphics; x: number; y: number; targetX: number; speed: number; life: number; maxLife: number; catching: boolean }[] = [];
   private waveSpawnTimer: number = 0;
   private waveSpawnInterval: number = 2500;
+  private oceanGfx: Phaser.GameObjects.Graphics | null = null;
+  private oceanTimer: number = 0;
   private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number }[] = [];
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
   private bullets: Phaser.Physics.Arcade.Group | null = null;
@@ -53,6 +55,8 @@ export class GameScene extends Phaser.Scene {
     this.activeWaves = [];
     this.waveSpawnTimer = 0;
     this.waveSpawnInterval = 2500;
+    this.oceanGfx = null;
+    this.oceanTimer = 0;
     this.vineSwings = [];
     this.tankPushers = [];
     this.bullets = null;
@@ -118,6 +122,10 @@ export class GameScene extends Phaser.Scene {
     if (this.worldIndex === 3) {
       this.bullets = this.physics.add.group({ allowGravity: false });
       this.physics.add.overlap(this.player, this.bullets, () => this.handleDeath(), undefined, this);
+    }
+
+    if (this.worldIndex === 1) {
+      this.oceanGfx = this.add.graphics().setDepth(45).setScrollFactor(0);
     }
   }
 
@@ -439,6 +447,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateWaves(delta: number) {
     this.waveSpawnTimer += delta;
+    this.oceanTimer += delta;
     if (this.waveSpawnTimer >= this.waveSpawnInterval) {
       this.waveSpawnTimer = 0;
       this.waveSpawnInterval = 2000 + Math.random() * 3000;
@@ -448,7 +457,64 @@ export class GameScene extends Phaser.Scene {
     const playerBounds = this.player.getBounds();
     const camScrollY = this.cameras.main.scrollY;
     const gameH = this.cameras.main.height;
+    const gameW = this.cameras.main.width;
     const screenBottom = camScrollY + gameH;
+
+    if (this.oceanGfx) {
+      this.oceanGfx.clear();
+      const waterHeight = TILE * 2.5;
+      const waterTop = gameH - waterHeight;
+
+      this.oceanGfx.fillStyle(0x002244, 0.8);
+      this.oceanGfx.fillRect(0, waterTop + 12, gameW, waterHeight);
+
+      this.oceanGfx.fillStyle(0x003366, 0.7);
+      this.oceanGfx.fillRect(0, waterTop + 18, gameW, waterHeight - 18);
+
+      this.oceanGfx.fillStyle(0x004477, 0.6);
+      this.oceanGfx.beginPath();
+      this.oceanGfx.moveTo(0, gameH);
+      for (let s = 0; s <= 40; s++) {
+        const t = s / 40;
+        const sx = t * gameW;
+        const sy = waterTop + 8
+          + Math.sin(this.oceanTimer * 0.002 + t * Math.PI * 4) * 4
+          + Math.sin(this.oceanTimer * 0.0015 + t * Math.PI * 2) * 3;
+        this.oceanGfx.lineTo(sx, sy);
+      }
+      this.oceanGfx.lineTo(gameW, gameH);
+      this.oceanGfx.closePath();
+      this.oceanGfx.fillPath();
+
+      this.oceanGfx.fillStyle(0x0066aa, 0.5);
+      this.oceanGfx.beginPath();
+      this.oceanGfx.moveTo(0, gameH);
+      for (let s = 0; s <= 40; s++) {
+        const t = s / 40;
+        const sx = t * gameW;
+        const sy = waterTop + 16
+          + Math.sin(this.oceanTimer * 0.0025 + t * Math.PI * 3 + 1) * 3
+          + Math.sin(this.oceanTimer * 0.001 + t * Math.PI * 5) * 2;
+        this.oceanGfx.lineTo(sx, sy);
+      }
+      this.oceanGfx.lineTo(gameW, gameH);
+      this.oceanGfx.closePath();
+      this.oceanGfx.fillPath();
+
+      this.oceanGfx.lineStyle(1, 0x88ccff, 0.25);
+      for (let r = 0; r < 3; r++) {
+        const rippleY = waterTop + 24 + r * 14;
+        this.oceanGfx.beginPath();
+        this.oceanGfx.moveTo(0, rippleY);
+        for (let s = 0; s <= 30; s++) {
+          const t = s / 30;
+          const sx = t * gameW;
+          const sy = rippleY + Math.sin(this.oceanTimer * 0.003 + t * Math.PI * 6 + r * 2) * 2;
+          this.oceanGfx.lineTo(sx, sy);
+        }
+        this.oceanGfx.strokePath();
+      }
+    }
 
     for (let i = this.activeWaves.length - 1; i >= 0; i--) {
       const w = this.activeWaves[i];
