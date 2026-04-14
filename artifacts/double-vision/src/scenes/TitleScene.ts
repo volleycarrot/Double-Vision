@@ -31,33 +31,39 @@ export class TitleScene extends Phaser.Scene {
     });
     subtitle.setOrigin(0.5);
 
-    const controlBg = this.add.rectangle(leftCenterX, height * 0.48, 360, 120, 0x16213e, 0.8);
+    const controlBoxY = height * 0.48;
+    const controlBoxW = 440;
+    const controlBoxH = 120;
+    const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
     controlBg.setStrokeStyle(2, 0x0f3460);
 
-    this.add.text(leftCenterX, height * 0.4, "CONTROLS", {
+    this.add.text(leftCenterX, controlBoxY - 40, "CONTROLS", {
       fontSize: "16px",
       fontFamily: "monospace",
       color: "#e94560",
       fontStyle: "bold",
     }).setOrigin(0.5);
 
-    this.add.text(leftCenterX - 140, height * 0.46, "Player 1:", {
+    const textLeftX = leftCenterX - controlBoxW / 2 + 20;
+    const textRightX = leftCenterX - controlBoxW / 2 + 170;
+
+    this.add.text(textLeftX, controlBoxY - 12, "Player 1:", {
       fontSize: "14px",
       fontFamily: "monospace",
       color: "#ffcc00",
     });
-    this.add.text(leftCenterX + 20, height * 0.46, "W = Jump  |  S = Duck", {
+    this.add.text(textRightX, controlBoxY - 12, "W = Jump  |  S = Duck", {
       fontSize: "14px",
       fontFamily: "monospace",
       color: "#ffffff",
     });
 
-    this.add.text(leftCenterX - 140, height * 0.52, "Player 2:", {
+    this.add.text(textLeftX, controlBoxY + 14, "Player 2:", {
       fontSize: "14px",
       fontFamily: "monospace",
       color: "#00ccff",
     });
-    this.add.text(leftCenterX + 20, height * 0.52, "\u2190 = Left  |  \u2192 = Right", {
+    this.add.text(textRightX, controlBoxY + 14, "\u2190 = Left  |  \u2192 = Right", {
       fontSize: "14px",
       fontFamily: "monospace",
       color: "#ffffff",
