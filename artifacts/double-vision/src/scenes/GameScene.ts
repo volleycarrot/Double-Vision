@@ -761,8 +761,10 @@ export class GameScene extends Phaser.Scene {
       const hitRect = new Phaser.Geom.Rectangle(hitLeft, hitTop, hitW, hitH);
       if (Phaser.Geom.Rectangle.Overlaps(playerBounds, hitRect)) {
         w.catching = true;
-        this.player.body.setVelocityX(w.speed * 0.9);
-        this.player.body.setVelocityY(Math.min(this.player.body.velocity.y, -40));
+        if (!this.isDucking) {
+          this.player.body.setVelocityX(w.speed * 0.9);
+          this.player.body.setVelocityY(Math.min(this.player.body.velocity.y, -40));
+        }
       } else {
         w.catching = false;
       }
