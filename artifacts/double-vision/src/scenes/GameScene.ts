@@ -40,6 +40,9 @@ export class GameScene extends Phaser.Scene {
   private oceanGfx: Phaser.GameObjects.Graphics | null = null;
   private oceanTimer: number = 0;
   private vineSwings: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number }[] = [];
+  private grabbedVine: { pivot: Phaser.GameObjects.Rectangle; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number } | null = null;
+  private vineGrabCooldown: number = 0;
+  private vineGrabGfx: Phaser.GameObjects.Graphics | null = null;
   private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
   private bullets: Phaser.Physics.Arcade.Group | null = null;
   private bulletTimer: number = 0;
@@ -74,6 +77,9 @@ export class GameScene extends Phaser.Scene {
     this.oceanGfx = null;
     this.oceanTimer = 0;
     this.vineSwings = [];
+    this.grabbedVine = null;
+    this.vineGrabCooldown = 0;
+    this.vineGrabGfx = null;
     this.tankPushers = [];
     this.bullets = null;
     this.bulletTimer = 0;
@@ -519,7 +525,8 @@ export class GameScene extends Phaser.Scene {
         const vineGfx = this.add.graphics();
         vineGfx.fillStyle(0x3b2a10, 1);
         vineGfx.fillRect(px - TILE / 2, vAnchorY - 4, TILE, 8);
-        const vine = this.add.rectangle(px, vAnchorY + vRopeLen / 2, 4, vRopeLen, 0x228b22);
+        const vine = this.add.rectangle(px, vAnchorY, 4, vRopeLen, 0x228b22);
+        vine.setOrigin(0.5, 0);
         const grabZone = this.add.rectangle(px, vAnchorY + vRopeLen - TILE / 2, TILE, TILE, 0x000000, 0);
         this.vineSwings.push({ pivot: vine, platform: grabZone, angle: Math.random() * Math.PI * 2, baseX: px, anchorY: vAnchorY, ropeLen: vRopeLen });
         break;
@@ -544,15 +551,55 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    let moveX = 0;
-    if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
-    if (this.cursors.right.isDown) moveX += PHYSICS.MOVE_SPEED;
-    this.player.body.setVelocityX(moveX);
+    if (this.vineGrabCooldown > 0) this.vineGrabCooldown -= delta;
 
-    const onGround = this.player.body.blocked.down || this.player.body.touching.down;
+    if (this.grabbedVine) {
+      if (Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
+        const v = this.grabbedVine;
+        const swingAngle = Math.sin(v.angle) * (Math.PI / 2);
+        const angularVel = Math.cos(v.angle) * 0.0025 * (Math.PI / 2);
+        const launchVelX = angularVel * Math.cos(swingAngle) * v.ropeLen * 120;
+        this.player.body.setVelocityX(launchVelX);
+        this.player.body.setVelocityY(PHYSICS.JUMP_VELOCITY);
+        this.player.body.setAllowGravity(true);
+        this.grabbedVine = null;
+        this.vineGrabCooldown = 300;
+        if (this.vineGrabGfx) {
+          this.vineGrabGfx.destroy();
+          this.vineGrabGfx = null;
+        }
+      } else {
+        const v = this.grabbedVine;
+        const swingAngle = Math.sin(v.angle) * (Math.PI / 2);
+        const endX = v.baseX + Math.sin(swingAngle) * v.ropeLen;
+        const endY = v.anchorY + Math.cos(swingAngle) * v.ropeLen;
+        this.player.setPosition(endX, endY);
+        this.player.body.setVelocity(0, 0);
+        this.player.body.setAllowGravity(false);
 
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.jump) && onGround) {
-      this.player.body.setVelocityY(PHYSICS.JUMP_VELOCITY);
+        if (!this.vineGrabGfx) {
+          this.vineGrabGfx = this.add.graphics();
+        }
+        this.vineGrabGfx.clear();
+        this.vineGrabGfx.lineStyle(3, 0x32cd32, 1);
+        this.vineGrabGfx.beginPath();
+        this.vineGrabGfx.moveTo(v.baseX, v.anchorY);
+        this.vineGrabGfx.lineTo(this.player.x, this.player.y);
+        this.vineGrabGfx.strokePath();
+        this.vineGrabGfx.fillStyle(0xffd700, 1);
+        this.vineGrabGfx.fillCircle(this.player.x, this.player.y - 16, 5);
+      }
+    } else {
+      let moveX = 0;
+      if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
+      if (this.cursors.right.isDown) moveX += PHYSICS.MOVE_SPEED;
+      this.player.body.setVelocityX(moveX);
+
+      const onGround = this.player.body.blocked.down || this.player.body.touching.down;
+
+      if (Phaser.Input.Keyboard.JustDown(this.cursors.jump) && onGround) {
+        this.player.body.setVelocityY(PHYSICS.JUMP_VELOCITY);
+      }
     }
 
     if (this.cursors.duck.isDown && !this.isDucking) {
@@ -1021,24 +1068,24 @@ export class GameScene extends Phaser.Scene {
     const playerBounds = this.player.getBounds();
     this.vineSwings.forEach((v) => {
       v.angle += delta * 0.0025;
-      const swingAngle = Math.sin(v.angle) * 0.6;
+      const swingAngle = Math.sin(v.angle) * (Math.PI / 2);
 
       const endX = v.baseX + Math.sin(swingAngle) * v.ropeLen;
       const endY = v.anchorY + Math.cos(swingAngle) * v.ropeLen;
 
-      const midX = v.baseX + Math.sin(swingAngle) * v.ropeLen / 2;
-      const midY = v.anchorY + Math.cos(swingAngle) * v.ropeLen / 2;
-      v.pivot.setPosition(midX, midY);
+      v.pivot.setPosition(v.baseX, v.anchorY);
       v.pivot.setRotation(swingAngle);
 
       v.platform.setPosition(endX, endY);
 
-      const grabBounds = new Phaser.Geom.Rectangle(endX - TILE / 2, endY - TILE / 2, TILE, TILE);
-      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, grabBounds)) {
-        const angularVel = Math.cos(v.angle) * 0.0025;
-        const swingVelX = angularVel * Math.cos(swingAngle) * v.ropeLen;
-        this.player.body.setVelocityX(swingVelX * 280);
-        this.player.body.setVelocityY(Math.min(this.player.body.velocity.y, -80));
+      if (!this.grabbedVine && this.vineGrabCooldown <= 0) {
+        const grabBounds = new Phaser.Geom.Rectangle(endX - TILE / 2, endY - TILE / 2, TILE, TILE);
+        if (Phaser.Geom.Rectangle.Overlaps(playerBounds, grabBounds)) {
+          this.grabbedVine = v;
+          this.player.body.setVelocity(0, 0);
+          this.player.body.setAllowGravity(false);
+          this.player.setPosition(endX, endY);
+        }
       }
     });
   }
@@ -1092,6 +1139,15 @@ export class GameScene extends Phaser.Scene {
     this.isDead = true;
     this.deaths++;
     this.deathText.setText(`Deaths: ${this.deaths}`);
+
+    if (this.grabbedVine) {
+      this.grabbedVine = null;
+      this.player.body.setAllowGravity(true);
+      if (this.vineGrabGfx) {
+        this.vineGrabGfx.destroy();
+        this.vineGrabGfx = null;
+      }
+    }
 
     this.cameras.main.shake(200, 0.01);
     this.cameras.main.flash(200, 255, 0, 0);
