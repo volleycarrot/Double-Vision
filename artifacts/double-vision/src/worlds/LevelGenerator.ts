@@ -125,5 +125,17 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
   }
 
-  return tiles;
+  const clearRadius = 2;
+  const checkpointXs = tiles.filter(t => t.type === "checkpoint").map(t => t.x);
+  const hazardTypes = new Set(["kill", "spike", "movement"]);
+  return tiles.filter(t => {
+    if (!hazardTypes.has(t.type)) return true;
+    for (const cpx of checkpointXs) {
+      const tileEndX = t.width ? t.x + t.width - 1 : t.x;
+      if (t.x <= cpx + clearRadius && tileEndX >= cpx - clearRadius) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
