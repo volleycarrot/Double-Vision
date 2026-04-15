@@ -4,6 +4,8 @@ import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
+import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
+import type { ParallaxLayer } from "../worlds/JungleBackground";
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -59,6 +61,7 @@ export class GameScene extends Phaser.Scene {
   private pauseKey2!: Phaser.Input.Keyboard.Key;
   private eyesGfx!: Phaser.GameObjects.Graphics;
   private lavaBackground: LavaBackgroundState | null = null;
+  private jungleLayers: ParallaxLayer[] = [];
 
   constructor() {
     super({ key: "GameScene" });
@@ -212,6 +215,12 @@ export class GameScene extends Phaser.Scene {
 
     if (this.worldIndex === 1) {
       this.oceanGfx = this.add.graphics().setDepth(55).setScrollFactor(0);
+    }
+
+    if (this.worldIndex === 2) {
+      this.jungleLayers = createJungleBackground(this);
+    } else {
+      this.jungleLayers = [];
     }
   }
 
@@ -678,6 +687,9 @@ export class GameScene extends Phaser.Scene {
 
     if (this.lavaBackground) {
       updateLavaBackground(this.lavaBackground, delta);
+    }
+    if (this.jungleLayers.length > 0) {
+      updateJungleParallax(this.jungleLayers, this.cameras.main);
     }
 
     if (this.vineGrabCooldown > 0) this.vineGrabCooldown -= delta;
