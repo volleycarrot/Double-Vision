@@ -7,6 +7,7 @@ import { drawAccessories } from "../AccessoryManager";
 import { getCoins, addCoins } from "../CoinManager";
 import type { GameMode } from "./ModeSelectScene";
 import { getBindings } from "../KeyBindings";
+import { onlineManager, type RemoteInputs } from "../OnlineMultiplayerManager";
 import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS } from "../GameSettings";
 import { toggleMusic } from "../MusicManager";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
@@ -79,6 +80,10 @@ export class GameScene extends Phaser.Scene {
   private coinsCollected: number = 0;
   private coinText!: Phaser.GameObjects.Text;
   private accessoryGfx!: Phaser.GameObjects.Graphics;
+  private onlineInputSendTimer: number = 0;
+  private onlineJumpLatch: boolean = false;
+  private disconnectOverlay: Phaser.GameObjects.Container | null = null;
+  private onlineRoleText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: "GameScene" });
@@ -91,16 +96,22 @@ export class GameScene extends Phaser.Scene {
     this.load.image("sand-platform", `${base}sand-platform.webp`);
   }
 
-  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode }) {
+  private levelSeed?: number;
+
+  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode; levelSeed?: number }) {
     this.worldIndex = data.worldIndex;
     this.deaths = data.deaths;
     this.startTime = data.startTime;
     this.gameMode = data.gameMode || "multiplayer";
+    this.levelSeed = data.levelSeed;
     this.isDead = false;
     this.isCompletingWorld = false;
     this.isDucking = false;
     this.isPaused = false;
     this.pauseContainer = null;
+    this.onlineInputSendTimer = 0;
+    this.disconnectOverlay = null;
+    this.onlineRoleText = null;
     this.checkpoints = [];
     this.waterTimers = new Map();
     this.quicksandContactTimer = 0;
@@ -147,7 +158,7 @@ export class GameScene extends Phaser.Scene {
     this.movementGroup = this.physics.add.staticGroup();
     this.caveGroup = this.physics.add.staticGroup();
 
-    const levelTiles = generateLevel(this.worldIndex);
+    const levelTiles = generateLevel(this.worldIndex, this.levelSeed);
     this.buildLevel(levelTiles, world);
 
     const spawnX = 3 * TILE;
@@ -184,13 +195,59 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, LEVEL_WIDTH * TILE, 15 * TILE);
     this.physics.world.setBounds(0, 0, LEVEL_WIDTH * TILE, 20 * TILE);
 
-    const bindings = getBindings(this.gameMode);
+    const bindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
+    const bindings = getBindings(bindingsMode);
     this.cursors = {
       left: this.input.keyboard!.addKey(bindings.left),
       right: this.input.keyboard!.addKey(bindings.right),
       jump: this.input.keyboard!.addKey(bindings.jump),
       duck: this.input.keyboard!.addKey(bindings.duck),
     };
+
+    if (this.gameMode === "online") {
+      onlineManager.removeAllListeners();
+      onlineManager.resetRemoteInputs();
+
+      onlineManager.on("remote_input", (msg: any) => {
+        onlineManager.updateRemoteInputs(msg.inputs);
+      });
+
+      onlineManager.on("remote_death", () => {
+        this.handleDeath(true);
+      });
+
+      onlineManager.on("remote_pause", () => {
+        if (!this.isPaused) this.pause(true);
+      });
+
+      onlineManager.on("remote_unpause", () => {
+        if (this.isPaused) this.unpause(true);
+      });
+
+      if (onlineManager.role === "guest") {
+        onlineManager.on("game_state", (msg: any) => {
+          if (this.isDead || this.isPaused) return;
+          const s = msg.state;
+          if (s && typeof s.x === "number") {
+            this.player.setPosition(s.x, s.y);
+            this.player.body.setVelocity(s.vx, s.vy);
+          }
+        });
+
+        onlineManager.on("world_selected", (msg: any) => {
+          this.restartWorld(true, msg.seed);
+        });
+
+      }
+
+      onlineManager.on("partner_disconnected", () => {
+        this.showDisconnectOverlay();
+      });
+
+      onlineManager.on("disconnected", () => {
+        this.showDisconnectOverlay();
+      });
+    }
 
     this.pauseKey1 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.pauseKey2 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -201,6 +258,9 @@ export class GameScene extends Phaser.Scene {
     this.events.on("shutdown", () => {
       this.pauseKey1.off("down", handlePause);
       this.pauseKey2.off("down", handlePause);
+      if (this.gameMode === "online") {
+        onlineManager.removeAllListeners();
+      }
       if (this.lavaBackground) {
         destroyLavaBackground(this.lavaBackground, this);
         this.lavaBackground = null;
@@ -233,6 +293,19 @@ export class GameScene extends Phaser.Scene {
       fontFamily: "monospace",
       color: "#e94560",
     }).setScrollFactor(0).setOrigin(1, 0).setDepth(100);
+
+    if (this.gameMode === "online") {
+      const role = onlineManager.role;
+      const roleLabel = role === "host" ? "You: LEFT / RIGHT" : "You: JUMP / DUCK";
+      const roleColor = role === "host" ? "#ffcc00" : "#00ccff";
+      this.onlineRoleText = this.add.text(16, 36, roleLabel, {
+        fontSize: "12px",
+        fontFamily: "monospace",
+        color: roleColor,
+        backgroundColor: "#0a0a1e",
+        padding: { x: 6, y: 2 },
+      }).setScrollFactor(0).setDepth(100).setOrigin(0, 0);
+    }
 
     if (this.worldIndex === 3) {
       this.bullets = this.physics.add.group({ allowGravity: false });
@@ -274,11 +347,11 @@ export class GameScene extends Phaser.Scene {
       this.coinText.setText(`Coins: ${getCoins()}`);
     }, undefined, this);
 
-    this.coinText = this.add.text(this.cameras.main.width / 2, 40, `Coins: ${getCoins()}`, {
+    this.coinText = this.add.text(784, 36, `Coins: ${getCoins()}`, {
       fontSize: "14px",
       fontFamily: "monospace",
       color: "#ffdd44",
-    }).setScrollFactor(0).setOrigin(0.5, 0).setDepth(100);
+    }).setScrollFactor(0).setOrigin(1, 0).setDepth(100);
 
     this.accessoryGfx = this.add.graphics().setDepth(11);
   }
@@ -773,6 +846,104 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private getEffectiveInputs(): { leftDown: boolean; rightDown: boolean; jumpJustDown: boolean; duckDown: boolean } {
+    if (this.gameMode !== "online") {
+      return {
+        leftDown: this.cursors.left.isDown,
+        rightDown: this.cursors.right.isDown,
+        jumpJustDown: Phaser.Input.Keyboard.JustDown(this.cursors.jump),
+        duckDown: this.cursors.duck.isDown,
+      };
+    }
+
+    const remote = onlineManager.getRemoteInputs();
+    const role = onlineManager.role;
+
+    if (role === "host") {
+      return {
+        leftDown: this.cursors.left.isDown,
+        rightDown: this.cursors.right.isDown,
+        jumpJustDown: remote.jump,
+        duckDown: remote.duck,
+      };
+    } else {
+      return {
+        leftDown: remote.left,
+        rightDown: remote.right,
+        jumpJustDown: Phaser.Input.Keyboard.JustDown(this.cursors.jump),
+        duckDown: this.cursors.duck.isDown,
+      };
+    }
+  }
+
+  private sendOnlineInputs() {
+    if (this.gameMode !== "online") return;
+    const role = onlineManager.role;
+    if (role === "host") {
+      onlineManager.sendInputs({
+        left: this.cursors.left.isDown,
+        right: this.cursors.right.isDown,
+        jump: false,
+        duck: false,
+      });
+    } else {
+      onlineManager.sendInputs({
+        left: false,
+        right: false,
+        jump: this.onlineJumpLatch,
+        duck: this.cursors.duck.isDown,
+      });
+    }
+  }
+
+  private showDisconnectOverlay() {
+    if (this.disconnectOverlay) return;
+    this.isPaused = true;
+    this.physics.world.pause();
+    this.tweens.pauseAll();
+
+    const { width, height } = this.cameras.main;
+    const scrollX = this.cameras.main.scrollX;
+    const scrollY = this.cameras.main.scrollY;
+    const cx = scrollX + width / 2;
+    const cy = scrollY + height / 2;
+
+    this.disconnectOverlay = this.add.container(cx, cy).setDepth(600);
+
+    const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.8);
+    this.disconnectOverlay.add(overlay);
+
+    const msg = this.add.text(0, -40, "PARTNER DISCONNECTED", {
+      fontSize: "28px",
+      fontFamily: "monospace",
+      color: "#ff4444",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.disconnectOverlay.add(msg);
+
+    const lobbyBtn = this.add.rectangle(0, 30, 220, 44, 0x16213e, 0.95);
+    lobbyBtn.setStrokeStyle(2, 0x0f3460);
+    lobbyBtn.setInteractive({ useHandCursor: true });
+    this.disconnectOverlay.add(lobbyBtn);
+
+    const lobbyLabel = this.add.text(0, 30, "Return to Lobby", {
+      fontSize: "18px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+    }).setOrigin(0.5);
+    this.disconnectOverlay.add(lobbyLabel);
+
+    lobbyBtn.on("pointerover", () => { lobbyBtn.setFillStyle(0x1e2d4a, 1); lobbyLabel.setColor("#ffffff"); });
+    lobbyBtn.on("pointerout", () => { lobbyBtn.setFillStyle(0x16213e, 0.95); lobbyLabel.setColor("#cccccc"); });
+    lobbyBtn.on("pointerdown", () => {
+      this.isPaused = false;
+      this.physics.world.resume();
+      this.tweens.resumeAll();
+      onlineManager.disconnect();
+      this.scene.start("LobbyScene");
+    });
+  }
+
   update(_time: number, delta: number) {
     if (this.isPaused) return;
     if (this.isDead) return;
@@ -795,10 +966,30 @@ export class GameScene extends Phaser.Scene {
       updateWarZoneBackground(this.warZoneBackground, delta);
     }
 
+    if (this.gameMode === "online") {
+      if (onlineManager.role === "guest" && Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
+        this.onlineJumpLatch = true;
+      }
+      this.onlineInputSendTimer += delta;
+      if (this.onlineInputSendTimer >= 33) {
+        this.sendOnlineInputs();
+        this.onlineJumpLatch = false;
+        if (onlineManager.role === "host") {
+          onlineManager.sendPosition(
+            this.player.x, this.player.y,
+            this.player.body.velocity.x, this.player.body.velocity.y
+          );
+        }
+        this.onlineInputSendTimer = 0;
+      }
+    }
+
+    const inputs = this.getEffectiveInputs();
+
     if (this.vineGrabCooldown > 0) this.vineGrabCooldown -= delta;
 
     if (this.grabbedVine) {
-      if (Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
+      if (inputs.jumpJustDown) {
         const v = this.grabbedVine;
         v.pivot.setVisible(true);
         const swingAngle = Math.sin(v.angle) * (Math.PI / 2);
@@ -832,28 +1023,28 @@ export class GameScene extends Phaser.Scene {
       this.player.body.setVelocityX(0);
     } else if (this.insideTank) {
       let moveX = 0;
-      if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
-      if (this.cursors.right.isDown) moveX += PHYSICS.MOVE_SPEED;
+      if (inputs.leftDown) moveX -= PHYSICS.MOVE_SPEED;
+      if (inputs.rightDown) moveX += PHYSICS.MOVE_SPEED;
       this.player.body.setVelocityX(moveX);
     } else {
       let moveX = 0;
-      if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
-      if (this.cursors.right.isDown) moveX += PHYSICS.MOVE_SPEED;
+      if (inputs.leftDown) moveX -= PHYSICS.MOVE_SPEED;
+      if (inputs.rightDown) moveX += PHYSICS.MOVE_SPEED;
       this.player.body.setVelocityX(moveX);
 
       const onGround = this.player.body.blocked.down || this.player.body.touching.down;
 
-      if (Phaser.Input.Keyboard.JustDown(this.cursors.jump) && onGround) {
+      if (inputs.jumpJustDown && onGround) {
         this.player.body.setVelocityY(PHYSICS.JUMP_VELOCITY);
       }
     }
 
-    if (this.cursors.duck.isDown && !this.isDucking) {
+    if (inputs.duckDown && !this.isDucking) {
       this.isDucking = true;
       this.player.setSize(28, PHYSICS.DUCK_HEIGHT);
       this.player.body.setSize(28, PHYSICS.DUCK_HEIGHT);
       this.player.y += (PHYSICS.NORMAL_HEIGHT - PHYSICS.DUCK_HEIGHT) / 2;
-    } else if (!this.cursors.duck.isDown && this.isDucking) {
+    } else if (!inputs.duckDown && this.isDucking) {
       const heightDiff = PHYSICS.NORMAL_HEIGHT - PHYSICS.DUCK_HEIGHT;
       const proposedTop = this.player.body.y - heightDiff;
       let blocked = false;
@@ -879,7 +1070,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.updateWorldMechanics(delta);
+    this.updateWorldMechanics(delta, inputs);
     this.checkCheckpoints();
 
     const currentHeight = this.isDucking ? PHYSICS.DUCK_HEIGHT : PHYSICS.NORMAL_HEIGHT;
@@ -895,7 +1086,7 @@ export class GameScene extends Phaser.Scene {
     this.previousPlayerX = this.player.x;
   }
 
-  private updateWorldMechanics(delta: number) {
+  private updateWorldMechanics(delta: number, inputs: { leftDown: boolean; rightDown: boolean; jumpJustDown: boolean; duckDown: boolean }) {
     switch (this.worldIndex) {
       case 0:
 
@@ -911,7 +1102,7 @@ export class GameScene extends Phaser.Scene {
         this.updateVineSwings(delta);
         break;
       case 3:
-        this.updateTankPush(delta);
+        this.updateTankPush(delta, inputs.jumpJustDown);
         this.updateBullets(delta);
         break;
     }
@@ -1370,7 +1561,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private updateTankPush(delta: number) {
+  private updateTankPush(delta: number, jumpPressed: boolean) {
     if (this.tankExitCooldown > 0) {
       this.tankExitCooldown -= delta;
     }
@@ -1393,7 +1584,7 @@ export class GameScene extends Phaser.Scene {
         this.player.body.setVelocityX(0);
       }
 
-      if (this.cursors.jump.isDown) {
+      if (jumpPressed) {
         this.insideTank = null;
         this.tankExitCooldown = 500;
         this.player.body.setAllowGravity(true);
@@ -1468,10 +1659,14 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private handleDeath() {
+  private handleDeath(fromRemote = false) {
     if (this.isDead || this.isCompletingWorld) return;
     this.isDead = true;
     this.deaths++;
+
+    if (!fromRemote && this.gameMode === "online") {
+      onlineManager.sendDeath();
+    }
     this.deathText.setText(`Deaths: ${this.deaths}`);
 
     let deathVine: typeof this.grabbedVine = null;
@@ -1511,7 +1706,9 @@ export class GameScene extends Phaser.Scene {
 
     markWorldCompleted(this.worldIndex, this.deaths);
 
-    const coinReward = Math.max(0, 10 - this.deaths);
+    const baseReward = Math.max(0, 10 - this.deaths);
+    const multiplier = this.gameMode === "online" ? 3 : 1;
+    const coinReward = baseReward * multiplier;
     if (coinReward > 0) {
       addCoins(coinReward);
       this.coinText.setText(`Coins: ${getCoins()}`);
@@ -1527,9 +1724,14 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(600);
 
-    const rewardMsg = coinReward > 0
-      ? `Level Complete!\n+${coinReward} bonus coins`
-      : `Level Complete!\nNo bonus coins (${this.deaths} deaths)`;
+    let rewardMsg: string;
+    if (coinReward <= 0) {
+      rewardMsg = `Level Complete!\nNo bonus coins (${this.deaths} deaths)`;
+    } else if (this.gameMode === "online") {
+      rewardMsg = `Level Complete!\n+${coinReward} bonus coins (3x co-op!)`;
+    } else {
+      rewardMsg = `Level Complete!\n+${coinReward} bonus coins`;
+    }
 
     const rewardText = this.add.text(cx, cy, rewardMsg, {
       fontFamily: "monospace",
@@ -1559,9 +1761,12 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private pause() {
+  private pause(fromRemote = false) {
     if (this.isPaused || this.isDead) return;
     this.isPaused = true;
+    if (!fromRemote && this.gameMode === "online") {
+      onlineManager.sendPause();
+    }
     this.physics.world.pause();
     this.tweens.pauseAll();
 
@@ -1650,11 +1855,15 @@ export class GameScene extends Phaser.Scene {
 
     const btnW = 200;
     const btnH = 44;
-    const buttons = [
+    const isOnlineGuest = this.gameMode === "online" && onlineManager.role === "guest";
+    const allButtons = [
       { label: "Unpause", y: 10, action: () => this.unpause() },
-      { label: "Restart", y: 62, action: () => this.restartWorld() },
+      { label: "Restart", y: 62, action: () => this.restartWorld(), hostOnly: true },
       { label: "Home", y: 114, action: () => this.goHome() },
     ];
+    const buttons = isOnlineGuest
+      ? allButtons.filter(b => !b.hostOnly).map((b, i) => ({ ...b, y: 10 + i * 52 }))
+      : allButtons;
 
     buttons.forEach((btn) => {
       const bg = this.add.rectangle(0, btn.y, btnW, btnH, 0x16213e, 0.95);
@@ -1681,9 +1890,12 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private unpause() {
+  private unpause(fromRemote = false) {
     if (!this.isPaused) return;
     this.isPaused = false;
+    if (!fromRemote && this.gameMode === "online") {
+      onlineManager.sendUnpause();
+    }
     this.physics.world.resume();
     this.tweens.resumeAll();
     if (this.pauseContainer) {
@@ -1692,17 +1904,26 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private restartWorld() {
+  private restartWorld(fromRemote = false, remoteSeed?: number) {
     this.isPaused = false;
     this.physics.world.resume();
     this.tweens.resumeAll();
-    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now(), gameMode: this.gameMode });
+    let seed = remoteSeed;
+    if (this.gameMode === "online" && !fromRemote) {
+      seed = Math.floor(Math.random() * 2147483646) + 1;
+      onlineManager.sendWorldSelect(this.worldIndex, seed);
+    }
+    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now(), gameMode: this.gameMode, levelSeed: seed });
   }
 
   private goHome() {
     this.isPaused = false;
     this.physics.world.resume();
     this.tweens.resumeAll();
+    if (this.gameMode === "online") {
+      onlineManager.leaveRoom();
+      onlineManager.removeAllListeners();
+    }
     this.scene.start("TitleScene", { gameMode: this.gameMode });
   }
 }

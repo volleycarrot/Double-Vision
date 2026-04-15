@@ -32,13 +32,20 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - Equipped accessories drawn on player character in-game
 - Completing a world returns to title; completing all 4 shows WinScene
 
+### Game Modes
+- **Single Player**: Full solo control with arrow keys
+- **Local Co-op**: Two players on shared keyboard (Player 1: W/S for jump/duck, Player 2: arrows for movement)
+- **Online Co-op**: Two players on separate devices via WebSocket. Host controls left/right, guest controls jump/duck. Room-code-based matchmaking.
+
 ### Controls
-- **Player 1**: W (jump), S (duck) — customizable via settings
-- **Player 2**: Left/Right arrows (move) — customizable via settings
+- **Player 1 (Local)**: W (jump), S (duck) — customizable via settings
+- **Player 2 (Local)**: Left/Right arrows (move) — customizable via settings
 - **Single Player**: Arrow keys for all controls — customizable via settings
+- **Online Host**: Arrow keys for left/right movement
+- **Online Guest**: Arrow keys for jump/duck
 - **Pause**: Escape or P
 - Controls can be remapped via the settings gear icon on the TitleScene
-- In multiplayer, Player 1 keys are restricted to letter keys (A-Z), Player 2 to arrow/nav keys
+- In local multiplayer, Player 1 keys are restricted to letter keys (A-Z), Player 2 to arrow/nav keys
 - Custom bindings persist in localStorage
 
 ### Settings
@@ -55,10 +62,13 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - `src/CoinManager.ts` - Coin balance persistence in localStorage
 - `src/AccessoryManager.ts` - Accessory definitions, ownership, equip state, and drawing logic
 - `src/ProgressManager.ts` - localStorage progress read/write (completion, deaths)
+- `src/OnlineMultiplayerManager.ts` - WebSocket client singleton for online co-op room management and input relay
+- `src/scenes/ModeSelectScene.ts` - Mode select with Single Player, Local Co-op, Online Co-op
+- `src/scenes/LobbyScene.ts` - Online co-op lobby (Create Room / Join Room)
 - `src/scenes/TitleScene.ts` - Title screen with world gallery, controls display, settings modal, and shop button
 - `src/scenes/ShopScene.ts` - Accessory shop with category tabs, buy/equip/remove, character preview
 - `src/scenes/WarningScene.ts` - Pre-world hazard warning
-- `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints, pause menu
+- `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints, pause menu, online input handling
 - `src/scenes/WinScene.ts` - Victory screen with stats (shown when all 4 worlds complete)
 - `src/worlds/WorldConfig.ts` - World definitions and physics constants
 - `src/worlds/LevelGenerator.ts` - Procedural level generation
@@ -66,6 +76,16 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 ### Dependencies
 - Phaser 3 (game framework with Arcade Physics)
 - Vite (dev server and bundling)
+
+## API Server (artifacts/api-server)
+
+### WebSocket Room Management
+- WebSocket server attached to HTTP server at `/api/ws`
+- Room lifecycle: create (generates 5-char alphanumeric code), join by code, relay inputs, handle disconnects
+- Server-side ping/pong for connection health monitoring
+- One socket per room enforcement (joining/creating evicts from prior room)
+- Key file: `src/ws/roomManager.ts`
+- Dependencies: ws (WebSocket library)
 
 ## Key Commands
 

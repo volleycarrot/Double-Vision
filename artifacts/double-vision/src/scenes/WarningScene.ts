@@ -1,13 +1,14 @@
 import Phaser from "phaser";
 import { WORLDS } from "../worlds/WorldConfig";
 import type { GameMode } from "./ModeSelectScene";
+import { onlineManager } from "../OnlineMultiplayerManager";
 
 export class WarningScene extends Phaser.Scene {
   constructor() {
     super({ key: "WarningScene" });
   }
 
-  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode }) {
+  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode; levelSeed?: number }) {
     const { width, height } = this.scale;
     const world = WORLDS[data.worldIndex];
 
@@ -73,7 +74,14 @@ export class WarningScene extends Phaser.Scene {
       }).setOrigin(0, 0.5);
     });
 
-    const prompt = this.add.text(width / 2, height * 0.85, "Press ENTER to continue", {
+    const isOnlineGuest = data.gameMode === "online" && onlineManager.role === "guest";
+    const isOnlineHost = data.gameMode === "online" && onlineManager.role === "host";
+
+    const promptText = isOnlineGuest
+      ? "Waiting for host to start..."
+      : "Press ENTER to continue";
+
+    const prompt = this.add.text(width / 2, height * 0.85, promptText, {
       fontSize: "18px",
       fontFamily: "monospace",
       color: "#ffffff",
@@ -88,8 +96,26 @@ export class WarningScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    this.input.keyboard!.once("keydown-ENTER", () => {
-      this.scene.start("GameScene", data);
-    });
+    if (isOnlineGuest) {
+      onlineManager.removeAllListeners();
+      onlineManager.on("remote_start_level", () => {
+        this.scene.start("GameScene", data);
+      });
+      onlineManager.on("partner_disconnected", () => {
+        onlineManager.disconnect();
+        this.scene.start("ModeSelectScene");
+      });
+      onlineManager.on("disconnected", () => {
+        onlineManager.disconnect();
+        this.scene.start("ModeSelectScene");
+      });
+    } else {
+      this.input.keyboard!.once("keydown-ENTER", () => {
+        if (isOnlineHost) {
+          onlineManager.sendStartLevel();
+        }
+        this.scene.start("GameScene", data);
+      });
+    }
   }
 }

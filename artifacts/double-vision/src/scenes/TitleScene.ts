@@ -6,6 +6,7 @@ import type { GameMode } from "./ModeSelectScene";
 import { getBindings, getKeyName, setBinding, resetBindings, isReservedKey, isArrowNavKey, isLetterKey, type ControlBindings } from "../KeyBindings";
 import { getBgColor, getSettings, setMusicEnabled, setBgColorIndex, BG_PRESETS } from "../GameSettings";
 import { toggleMusic } from "../MusicManager";
+import { onlineManager } from "../OnlineMultiplayerManager";
 
 export class TitleScene extends Phaser.Scene {
   private gameMode: GameMode = "multiplayer";
@@ -50,7 +51,12 @@ export class TitleScene extends Phaser.Scene {
     });
     title.setOrigin(0.5);
 
-    const modeLabel = this.gameMode === "single" ? "Single Player" : "2-Player Co-op Platformer";
+    const modeLabels: Record<string, string> = {
+      single: "Single Player",
+      multiplayer: "2-Player Co-op Platformer",
+      online: "Online Co-op",
+    };
+    const modeLabel = modeLabels[this.gameMode] || "2-Player Co-op Platformer";
     const subtitle = this.add.text(leftCenterX, height * 0.25, modeLabel, {
       fontSize: "18px",
       fontFamily: "monospace",
@@ -140,63 +146,113 @@ export class TitleScene extends Phaser.Scene {
       fontStyle: "bold",
     }).setOrigin(0.5, 0);
 
-    WORLDS.forEach((world, i) => {
-      const btnY = galleryTop + 28 + i * (btnH + btnGap);
-      const completed = progress.worlds[i]?.completed ?? false;
+    const isOnlineGuest = this.gameMode === "online" && onlineManager.role === "guest";
 
-      const btnBg = this.add.rectangle(galleryX + btnW / 2, btnY + btnH / 2, btnW, btnH, 0x16213e, 0.9);
-      btnBg.setStrokeStyle(2, completed ? 0x00ff88 : 0x0f3460);
-      btnBg.setInteractive({ useHandCursor: true });
-
-      const worldEmojis = ["🌋", "🏖️", "🌴", "🪖"];
-      this.add.text(galleryX + 18, btnY + btnH / 2, worldEmojis[i], {
-        fontSize: "20px",
-      }).setOrigin(0.5, 0.5);
-
-      const label = this.add.text(galleryX + 34, btnY + btnH / 2 - 8, world.name, {
-        fontSize: "14px",
+    if (isOnlineGuest) {
+      this.add.text(galleryX + btnW / 2, galleryTop + 28 + (WORLDS.length * (btnH + btnGap)) / 2, "Waiting for host\nto pick a world...", {
+        fontSize: "16px",
         fontFamily: "monospace",
-        color: completed ? "#00ff88" : "#cccccc",
-        fontStyle: completed ? "bold" : "normal",
-      }).setOrigin(0, 0);
+        color: "#aaaacc",
+        align: "center",
+      }).setOrigin(0.5);
 
-      if (completed) {
-        this.add.text(galleryX + btnW - 12, btnY + btnH / 2, "\u2713", {
+      onlineManager.removeAllListeners();
+
+      const pending = onlineManager.consumePendingWorld();
+      if (pending !== null) {
+        this.startWorld(pending.worldIndex, pending.seed);
+        return;
+      }
+
+      onlineManager.on("world_selected", (msg: any) => {
+        this.startWorld(msg.worldIndex, msg.seed);
+      });
+      onlineManager.on("partner_disconnected", () => {
+        onlineManager.disconnect();
+        this.scene.start("ModeSelectScene");
+      });
+      onlineManager.on("disconnected", () => {
+        onlineManager.disconnect();
+        this.scene.start("ModeSelectScene");
+      });
+    } else {
+      WORLDS.forEach((world, i) => {
+        const btnY = galleryTop + 28 + i * (btnH + btnGap);
+        const completed = progress.worlds[i]?.completed ?? false;
+
+        const btnBg = this.add.rectangle(galleryX + btnW / 2, btnY + btnH / 2, btnW, btnH, 0x16213e, 0.9);
+        btnBg.setStrokeStyle(2, completed ? 0x00ff88 : 0x0f3460);
+        btnBg.setInteractive({ useHandCursor: true });
+
+        const worldEmojis = ["🌋", "🏖️", "🌴", "🪖"];
+        this.add.text(galleryX + 18, btnY + btnH / 2, worldEmojis[i], {
           fontSize: "20px",
-          fontFamily: "monospace",
-          color: "#00ff88",
-          fontStyle: "bold",
-        }).setOrigin(1, 0.5);
-      }
+        }).setOrigin(0.5, 0.5);
 
-      const deathCount = progress.worlds[i]?.deaths ?? 0;
-      if (completed && deathCount > 0) {
-        this.add.text(galleryX + 34, btnY + btnH / 2 + 8, `Deaths: ${deathCount}`, {
-          fontSize: "10px",
+        const label = this.add.text(galleryX + 34, btnY + btnH / 2 - 8, world.name, {
+          fontSize: "14px",
           fontFamily: "monospace",
-          color: "#888888",
+          color: completed ? "#00ff88" : "#cccccc",
+          fontStyle: completed ? "bold" : "normal",
         }).setOrigin(0, 0);
-      }
 
-      btnBg.on("pointerover", () => {
-        btnBg.setFillStyle(0x1e2d4a, 1);
-        label.setColor("#ffffff");
+        if (completed) {
+          this.add.text(galleryX + btnW - 12, btnY + btnH / 2, "\u2713", {
+            fontSize: "20px",
+            fontFamily: "monospace",
+            color: "#00ff88",
+            fontStyle: "bold",
+          }).setOrigin(1, 0.5);
+        }
+
+        const deathCount = progress.worlds[i]?.deaths ?? 0;
+        if (completed && deathCount > 0) {
+          this.add.text(galleryX + 34, btnY + btnH / 2 + 8, `Deaths: ${deathCount}`, {
+            fontSize: "10px",
+            fontFamily: "monospace",
+            color: "#888888",
+          }).setOrigin(0, 0);
+        }
+
+        btnBg.on("pointerover", () => {
+          btnBg.setFillStyle(0x1e2d4a, 1);
+          label.setColor("#ffffff");
+        });
+        btnBg.on("pointerout", () => {
+          btnBg.setFillStyle(0x16213e, 0.9);
+          label.setColor(completed ? "#00ff88" : "#cccccc");
+        });
+        btnBg.on("pointerdown", () => {
+          if (this.settingsOpen) return;
+          if (this.gameMode === "online") {
+            const seed = Math.floor(Math.random() * 2147483646) + 1;
+            onlineManager.sendWorldSelect(i, seed);
+            this.startWorld(i, seed);
+            return;
+          }
+          this.startWorld(i);
+        });
       });
-      btnBg.on("pointerout", () => {
-        btnBg.setFillStyle(0x16213e, 0.9);
-        label.setColor(completed ? "#00ff88" : "#cccccc");
-      });
-      btnBg.on("pointerdown", () => {
-        if (this.settingsOpen) return;
-        this.scene.start("WarningScene", { worldIndex: i, deaths: 0, startTime: Date.now(), gameMode: this.gameMode });
-      });
-    });
+    }
 
     const enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     enterKey.on("down", () => {
-      if (this.settingsOpen) return;
-      this.scene.start("WarningScene", { worldIndex: 0, deaths: 0, startTime: Date.now(), gameMode: this.gameMode });
+      if (this.settingsOpen || isOnlineGuest) return;
+      if (this.gameMode === "online") {
+        const seed = Math.floor(Math.random() * 2147483646) + 1;
+        onlineManager.sendWorldSelect(0, seed);
+        this.startWorld(0, seed);
+        return;
+      }
+      this.startWorld(0);
     });
+
+    const handleBack = () => {
+      if (this.gameMode === "online") {
+        onlineManager.disconnect();
+      }
+      this.scene.start("ModeSelectScene");
+    };
 
     const escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     escKey.on("down", () => {
@@ -204,7 +260,7 @@ export class TitleScene extends Phaser.Scene {
         this.closeSettings();
         return;
       }
-      this.scene.start("ModeSelectScene");
+      handleBack();
     });
 
     const backBtn = this.add.text(16, 16, "< Back", {
@@ -219,7 +275,7 @@ export class TitleScene extends Phaser.Scene {
     backBtn.on("pointerout", () => backBtn.setColor("#cccccc"));
     backBtn.on("pointerdown", () => {
       if (this.settingsOpen) return;
-      this.scene.start("ModeSelectScene");
+      handleBack();
     });
 
     this.addSettingsButton(leftCenterX, height);
@@ -228,7 +284,14 @@ export class TitleScene extends Phaser.Scene {
     this.events.on("shutdown", () => {
       this.removeKeyListener();
       this.clearError();
+      if (this.gameMode === "online") {
+        onlineManager.removeAllListeners();
+      }
     });
+  }
+
+  private startWorld(worldIndex: number, seed?: number) {
+    this.scene.start("WarningScene", { worldIndex, deaths: 0, startTime: Date.now(), gameMode: this.gameMode, levelSeed: seed });
   }
 
   private renderControlsBox(leftCenterX: number, height: number) {
@@ -237,9 +300,54 @@ export class TitleScene extends Phaser.Scene {
 
     const controlBoxY = height * 0.48;
     const controlBoxW = 440;
-    const bindings = getBindings(this.gameMode);
+    const bindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
+    const bindings = getBindings(bindingsMode);
 
-    if (this.gameMode === "single") {
+    if (this.gameMode === "online") {
+      const controlBoxH = 120;
+      const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
+      controlBg.setStrokeStyle(2, 0x0f3460);
+      this.controlTexts.push(controlBg);
+
+      const header = this.add.text(leftCenterX, controlBoxY - 40, "ONLINE CONTROLS", {
+        fontSize: "16px",
+        fontFamily: "monospace",
+        color: "#e94560",
+        fontStyle: "bold",
+      }).setOrigin(0.5);
+      this.controlTexts.push(header);
+
+      const textLeftX = leftCenterX - controlBoxW / 2 + 20;
+      const textRightX = leftCenterX - controlBoxW / 2 + 170;
+
+      const hostLabel = this.add.text(textLeftX, controlBoxY - 12, "Host (You):", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffcc00",
+      });
+      this.controlTexts.push(hostLabel);
+
+      const hostVal = this.add.text(textRightX, controlBoxY - 12, `${getKeyName(bindings.left)} / ${getKeyName(bindings.right)} = Move`, {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffffff",
+      });
+      this.controlTexts.push(hostVal);
+
+      const guestLabel = this.add.text(textLeftX, controlBoxY + 14, "Partner:", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#00ccff",
+      });
+      this.controlTexts.push(guestLabel);
+
+      const guestVal = this.add.text(textRightX, controlBoxY + 14, "Jump / Duck", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffffff",
+      });
+      this.controlTexts.push(guestVal);
+    } else if (this.gameMode === "single") {
       const controlBoxH = 120;
       const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
       controlBg.setStrokeStyle(2, 0x0f3460);
@@ -508,7 +616,8 @@ export class TitleScene extends Phaser.Scene {
 
     curY += 20;
 
-    const bindings = getBindings(this.gameMode);
+    const settingsBindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
+    const bindings = getBindings(settingsBindingsMode);
     const actionLabels: Record<keyof ControlBindings, string> = {
       left: "Move Left",
       right: "Move Right",
@@ -561,7 +670,7 @@ export class TitleScene extends Phaser.Scene {
     );
     resetBtn.forEach(obj => this.settingsDynamicObjects.push(obj));
     (resetBtn[0] as Phaser.GameObjects.Rectangle).on("pointerdown", () => {
-      resetBindings(this.gameMode);
+      resetBindings(this.gameMode === "online" ? "single" : this.gameMode);
       this.refreshSettingsModal();
       this.refreshControlsBox();
     });
@@ -636,7 +745,8 @@ export class TitleScene extends Phaser.Scene {
         }
       }
 
-      const bindings = getBindings(this.gameMode);
+      const kbMode = this.gameMode === "online" ? "single" : this.gameMode;
+      const bindings = getBindings(kbMode);
       const actions = Object.keys(bindings) as (keyof ControlBindings)[];
       for (const a of actions) {
         if (a !== action && bindings[a] === keyCode) {
@@ -649,7 +759,7 @@ export class TitleScene extends Phaser.Scene {
       this.waitingForKey = null;
       this.clearError();
 
-      setBinding(this.gameMode, action, keyCode);
+      setBinding(kbMode, action, keyCode);
       this.refreshSettingsModal();
       this.refreshControlsBox();
     };

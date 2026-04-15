@@ -15,9 +15,9 @@ function seededRandom(seed: number) {
   };
 }
 
-export function generateLevel(worldIndex: number): LevelTile[] {
+export function generateLevel(worldIndex: number, seed?: number): LevelTile[] {
   const tiles: LevelTile[] = [];
-  const baseSeed = Math.floor(Math.random() * 2147483646) + 1;
+  const baseSeed = seed ?? Math.floor(Math.random() * 2147483646) + 1;
   const rand = seededRandom(baseSeed);
   const checkpointSpacing = Math.floor(LEVEL_WIDTH / (CHECKPOINT_COUNT + 1));
 

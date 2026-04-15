@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { getBgColor } from "../GameSettings";
 
-export type GameMode = "single" | "multiplayer";
+export type GameMode = "single" | "multiplayer" | "online";
 
 export class ModeSelectScene extends Phaser.Scene {
   constructor() {
@@ -13,7 +13,7 @@ export class ModeSelectScene extends Phaser.Scene {
 
     this.cameras.main.setBackgroundColor(getBgColor().value);
 
-    const title = this.add.text(width / 2, height * 0.18, "CHOOSE MODE", {
+    const title = this.add.text(width / 2, height * 0.12, "CHOOSE MODE", {
       fontSize: "36px",
       fontFamily: "monospace",
       color: "#ff2222",
@@ -22,13 +22,13 @@ export class ModeSelectScene extends Phaser.Scene {
     title.setOrigin(0.5);
 
     const btnW = 280;
-    const btnH = 70;
+    const btnH = 60;
 
-    const singleBg = this.add.rectangle(width / 2, height * 0.42, btnW, btnH, 0x16213e, 0.9);
+    const singleBg = this.add.rectangle(width / 2, height * 0.32, btnW, btnH, 0x16213e, 0.9);
     singleBg.setStrokeStyle(2, 0x0f3460);
     singleBg.setInteractive({ useHandCursor: true });
 
-    const singleLabel = this.add.text(width / 2, height * 0.42 - 8, "SINGLE PLAYER", {
+    const singleLabel = this.add.text(width / 2, height * 0.32 - 8, "SINGLE PLAYER", {
       fontSize: "20px",
       fontFamily: "monospace",
       color: "#ffcc00",
@@ -36,33 +36,47 @@ export class ModeSelectScene extends Phaser.Scene {
     });
     singleLabel.setOrigin(0.5);
 
-    this.add.text(width / 2, height * 0.42 + 16, "Arrow keys to move, jump & duck", {
+    this.add.text(width / 2, height * 0.32 + 16, "Arrow keys to move, jump & duck", {
       fontSize: "11px",
       fontFamily: "monospace",
       color: "#888888",
     }).setOrigin(0.5);
 
-    const multiBg = this.add.rectangle(width / 2, height * 0.62, btnW, btnH, 0x16213e, 0.9);
-    multiBg.setStrokeStyle(2, 0x0f3460);
-    multiBg.setInteractive({ useHandCursor: true });
+    const localBg = this.add.rectangle(width / 2, height * 0.52, btnW, btnH, 0x16213e, 0.9);
+    localBg.setStrokeStyle(2, 0x0f3460);
+    localBg.setInteractive({ useHandCursor: true });
 
-    const multiLabel = this.add.text(width / 2, height * 0.62 - 8, "MULTIPLAYER", {
+    const localLabel = this.add.text(width / 2, height * 0.52 - 8, "LOCAL CO-OP", {
       fontSize: "20px",
       fontFamily: "monospace",
       color: "#00ccff",
       fontStyle: "bold",
     });
-    multiLabel.setOrigin(0.5);
+    localLabel.setOrigin(0.5);
 
-    this.add.text(width / 2, height * 0.62 + 16, "Two players, shared keyboard", {
+    this.add.text(width / 2, height * 0.52 + 16, "Two players, shared keyboard", {
       fontSize: "11px",
       fontFamily: "monospace",
       color: "#888888",
     }).setOrigin(0.5);
 
-    const selectMode = (mode: GameMode) => {
-      this.scene.start("TitleScene", { gameMode: mode });
-    };
+    const onlineBg = this.add.rectangle(width / 2, height * 0.72, btnW, btnH, 0x16213e, 0.9);
+    onlineBg.setStrokeStyle(2, 0x0f3460);
+    onlineBg.setInteractive({ useHandCursor: true });
+
+    const onlineLabel = this.add.text(width / 2, height * 0.72 - 8, "ONLINE CO-OP", {
+      fontSize: "20px",
+      fontFamily: "monospace",
+      color: "#ff8800",
+      fontStyle: "bold",
+    });
+    onlineLabel.setOrigin(0.5);
+
+    this.add.text(width / 2, height * 0.72 + 16, "Share control over the internet", {
+      fontSize: "11px",
+      fontFamily: "monospace",
+      color: "#888888",
+    }).setOrigin(0.5);
 
     singleBg.on("pointerover", () => {
       singleBg.setFillStyle(0x1e2d4a, 1);
@@ -72,17 +86,27 @@ export class ModeSelectScene extends Phaser.Scene {
       singleBg.setFillStyle(0x16213e, 0.9);
       singleLabel.setColor("#ffcc00");
     });
-    singleBg.on("pointerdown", () => selectMode("single"));
+    singleBg.on("pointerdown", () => this.scene.start("TitleScene", { gameMode: "single" as GameMode }));
 
-    multiBg.on("pointerover", () => {
-      multiBg.setFillStyle(0x1e2d4a, 1);
-      multiLabel.setColor("#ffffff");
+    localBg.on("pointerover", () => {
+      localBg.setFillStyle(0x1e2d4a, 1);
+      localLabel.setColor("#ffffff");
     });
-    multiBg.on("pointerout", () => {
-      multiBg.setFillStyle(0x16213e, 0.9);
-      multiLabel.setColor("#00ccff");
+    localBg.on("pointerout", () => {
+      localBg.setFillStyle(0x16213e, 0.9);
+      localLabel.setColor("#00ccff");
     });
-    multiBg.on("pointerdown", () => selectMode("multiplayer"));
+    localBg.on("pointerdown", () => this.scene.start("TitleScene", { gameMode: "multiplayer" as GameMode }));
+
+    onlineBg.on("pointerover", () => {
+      onlineBg.setFillStyle(0x1e2d4a, 1);
+      onlineLabel.setColor("#ffffff");
+    });
+    onlineBg.on("pointerout", () => {
+      onlineBg.setFillStyle(0x16213e, 0.9);
+      onlineLabel.setColor("#ff8800");
+    });
+    onlineBg.on("pointerdown", () => this.scene.start("LobbyScene"));
 
     const escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     escKey.once("down", () => {
