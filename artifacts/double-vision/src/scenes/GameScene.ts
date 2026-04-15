@@ -65,6 +65,8 @@ export class GameScene extends Phaser.Scene {
   preload() {
     const base = (import.meta as any).env?.BASE_URL || "/";
     this.load.image("wave", `${base}wave.png`);
+    this.load.image("magma-platform", `${base}magma-platform.png`);
+    this.load.image("sand-platform", `${base}sand-platform.webp`);
   }
 
   create(data: { worldIndex: number; deaths: number; startTime: number }) {
@@ -217,10 +219,41 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case "platform": {
-          const p = this.add.rectangle(px, py, TILE, TILE, world.platformColor);
-          p.setStrokeStyle(1, 0x000000, 0.3);
-          this.platformGroup.add(p);
-          (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+          if (this.worldIndex === 0) {
+            const p = this.add.image(px, py, "magma-platform");
+            p.setDisplaySize(TILE, TILE);
+            p.setTint(0x992200);
+            this.platformGroup.add(p);
+            (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+          } else if (this.worldIndex === 1) {
+            const p = this.add.image(px, py, "sand-platform");
+            p.setDisplaySize(TILE, TILE);
+            this.platformGroup.add(p);
+            (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+          } else {
+            const p = this.add.rectangle(px, py, TILE, TILE, world.platformColor);
+            p.setStrokeStyle(1, 0x000000, 0.3);
+            this.platformGroup.add(p);
+            (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+          }
+
+          const halfT = TILE / 2;
+          if (this.worldIndex === 2) {
+            const gfx = this.add.graphics();
+            gfx.lineStyle(1, 0x3a1a00, 0.3);
+            for (let i = 0; i < 3; i++) {
+              const ly = py - halfT + 6 + i * 9;
+              gfx.beginPath();
+              gfx.moveTo(px - halfT + 2, ly);
+              gfx.lineTo(px + halfT - 2, ly + 2);
+              gfx.strokePath();
+            }
+            gfx.lineStyle(1, 0x5c3a1a, 0.2);
+            gfx.beginPath();
+            gfx.moveTo(px - halfT + 8, py - halfT + 2);
+            gfx.lineTo(px - halfT + 10, py + halfT - 2);
+            gfx.strokePath();
+          }
           break;
         }
         case "kill": {
