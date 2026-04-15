@@ -3,6 +3,7 @@ import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } fr
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
+import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -57,6 +58,7 @@ export class GameScene extends Phaser.Scene {
   private pauseKey1!: Phaser.Input.Keyboard.Key;
   private pauseKey2!: Phaser.Input.Keyboard.Key;
   private eyesGfx!: Phaser.GameObjects.Graphics;
+  private lavaBackground: LavaBackgroundState | null = null;
 
   constructor() {
     super({ key: "GameScene" });
@@ -100,6 +102,10 @@ export class GameScene extends Phaser.Scene {
     this.bullets = null;
     this.bulletTimer = 0;
     this.bulletVisuals = [];
+    if (this.lavaBackground) {
+      destroyLavaBackground(this.lavaBackground, this);
+      this.lavaBackground = null;
+    }
 
     const world = WORLDS[this.worldIndex];
 
@@ -165,6 +171,10 @@ export class GameScene extends Phaser.Scene {
     this.events.on("shutdown", () => {
       this.pauseKey1.off("down", handlePause);
       this.pauseKey2.off("down", handlePause);
+      if (this.lavaBackground) {
+        destroyLavaBackground(this.lavaBackground, this);
+        this.lavaBackground = null;
+      }
     });
 
     this.worldText = this.add.text(16, 16, world.name, {
@@ -197,6 +207,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.worldIndex === 0) {
       this.lavaSplashGfx = this.add.graphics();
+      this.lavaBackground = createLavaBackground(this);
     }
 
     if (this.worldIndex === 1) {
@@ -663,6 +674,10 @@ export class GameScene extends Phaser.Scene {
     if (this.player.y > 18 * TILE) {
       this.handleDeath();
       return;
+    }
+
+    if (this.lavaBackground) {
+      updateLavaBackground(this.lavaBackground, delta);
     }
 
     if (this.vineGrabCooldown > 0) this.vineGrabCooldown -= delta;
