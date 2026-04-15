@@ -24,6 +24,7 @@ export class GameScene extends Phaser.Scene {
   private startTime: number = 0;
   private lastCheckpointX: number = 0;
   private lastCheckpointY: number = 0;
+  private previousPlayerX: number = 0;
   private isDead: boolean = false;
   private isDucking: boolean = false;
   private deathText!: Phaser.GameObjects.Text;
@@ -124,6 +125,7 @@ export class GameScene extends Phaser.Scene {
     this.player = playerRect as any;
     this.player.body.setCollideWorldBounds(false);
     this.player.body.setSize(28, PHYSICS.NORMAL_HEIGHT);
+    this.previousPlayerX = this.player.x;
 
     this.eyesGfx = this.add.graphics().setDepth(10);
 
@@ -694,6 +696,8 @@ export class GameScene extends Phaser.Scene {
     if (this.player.x > (LEVEL_WIDTH - 3) * TILE) {
       this.completeWorld();
     }
+
+    this.previousPlayerX = this.player.x;
   }
 
   private updateWorldMechanics(delta: number) {
@@ -1249,8 +1253,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkCheckpoints() {
+    const currX = this.player.x;
+    const prevX = this.previousPlayerX;
     this.checkpoints.forEach((cp) => {
-      if (!cp.reached && Math.abs(this.player.x - cp.x) < TILE && Math.abs(this.player.y - cp.y) < TILE * 3) {
+      if (!cp.reached && ((prevX <= cp.x && currX >= cp.x) || (prevX >= cp.x && currX <= cp.x))) {
         cp.reached = true;
         this.lastCheckpointX = cp.x + TILE * 1.5;
         this.lastCheckpointY = cp.y;
@@ -1293,6 +1299,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.player.x = this.lastCheckpointX;
       this.player.y = this.lastCheckpointY;
+      this.previousPlayerX = this.player.x;
       this.player.body.setVelocity(0, 0);
       this.isDead = false;
       if (this.isDucking) {
