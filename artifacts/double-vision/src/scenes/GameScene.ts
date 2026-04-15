@@ -220,19 +220,48 @@ export class GameScene extends Phaser.Scene {
         }
         case "platform": {
           if (this.worldIndex === 0) {
+            const halfT = TILE / 2;
+            const radius = 6;
+            const maskGfx = this.add.graphics();
+            maskGfx.setVisible(false);
+            maskGfx.fillStyle(0xffffff);
+            maskGfx.fillRoundedRect(px - halfT, py - halfT, TILE, TILE, radius);
             const p = this.add.image(px, py, "magma-platform");
             p.setDisplaySize(TILE, TILE);
             p.setTint(0x992200);
-            this.platformGroup.add(p);
-            (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+            p.setMask(maskGfx.createGeometryMask());
+            const outline = this.add.graphics();
+            outline.lineStyle(2, 0x330000, 1);
+            outline.strokeRoundedRect(px - halfT, py - halfT, TILE, TILE, radius);
+            const body = this.add.rectangle(px, py, TILE, TILE, 0x000000, 0);
+            this.platformGroup.add(body);
+            (body.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
           } else if (this.worldIndex === 1) {
+            const halfT = TILE / 2;
+            const radius = 6;
+            const maskGfx = this.add.graphics();
+            maskGfx.setVisible(false);
+            maskGfx.fillStyle(0xffffff);
+            maskGfx.fillRoundedRect(px - halfT, py - halfT, TILE, TILE, radius);
             const p = this.add.image(px, py, "sand-platform");
             p.setDisplaySize(TILE, TILE);
-            this.platformGroup.add(p);
-            (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+            p.setMask(maskGfx.createGeometryMask());
+            const outline = this.add.graphics();
+            outline.lineStyle(2, 0x8b6914, 1);
+            outline.strokeRoundedRect(px - halfT, py - halfT, TILE, TILE, radius);
+            const body = this.add.rectangle(px, py, TILE, TILE, 0x000000, 0);
+            this.platformGroup.add(body);
+            (body.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
           } else {
-            const p = this.add.rectangle(px, py, TILE, TILE, world.platformColor);
-            p.setStrokeStyle(1, 0x000000, 0.3);
+            const halfT2 = TILE / 2;
+            const radius2 = 6;
+            const outlineColor = this.worldIndex === 2 ? 0x2a1505 : 0x1a1a1a;
+            const gfxFill = this.add.graphics();
+            gfxFill.fillStyle(world.platformColor, 1);
+            gfxFill.fillRoundedRect(px - halfT2, py - halfT2, TILE, TILE, radius2);
+            gfxFill.lineStyle(2, outlineColor, 1);
+            gfxFill.strokeRoundedRect(px - halfT2, py - halfT2, TILE, TILE, radius2);
+            const p = this.add.rectangle(px, py, TILE, TILE, 0x000000, 0);
             this.platformGroup.add(p);
             (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
           }
