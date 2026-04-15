@@ -308,7 +308,7 @@ function _drawAccessoryById(
       break;
     }
     case "scarf": {
-      const neckY = centerY - bodyHeight * 0.25;
+      const neckY = centerY;
       gfx.fillStyle(0x2266aa, 0.9);
       gfx.fillRect(centerX - bodyWidth / 2 - 2, neckY - 3, bodyWidth + 4, 8);
       gfx.fillRect(centerX + bodyWidth / 2 - 3, neckY + 5, 6, 14);
