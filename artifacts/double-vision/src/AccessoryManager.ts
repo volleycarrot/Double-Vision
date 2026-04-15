@@ -6,7 +6,7 @@ const STORAGE_KEY = "double-vision-accessories";
 export interface Accessory {
   id: string;
   name: string;
-  category: "hat" | "glasses" | "cape" | "neckwear";
+  category: "hat" | "glasses" | "neckwear";
   price: number;
   emoji: string;
 }
@@ -18,12 +18,13 @@ export const ACCESSORIES: Accessory[] = [
   { id: "cowboy", name: "Cowboy Hat", category: "hat", price: 75, emoji: "🤠" },
   { id: "beanie", name: "Beanie", category: "hat", price: 40, emoji: "🧢" },
   { id: "halo", name: "Halo", category: "hat", price: 120, emoji: "😇" },
+  { id: "headband", name: "Headband", category: "hat", price: 45, emoji: "🎀" },
   { id: "sunglasses", name: "Sunglasses", category: "glasses", price: 35, emoji: "😎" },
   { id: "nerdglasses", name: "Nerd Glasses", category: "glasses", price: 25, emoji: "🤓" },
   { id: "monocle", name: "Monocle", category: "glasses", price: 60, emoji: "🧐" },
-  { id: "cape", name: "Cape", category: "cape", price: 80, emoji: "🦸" },
-  { id: "scarf", name: "Scarf", category: "cape", price: 45, emoji: "🧣" },
   { id: "bowtie", name: "Bow Tie", category: "neckwear", price: 20, emoji: "🎀" },
+  { id: "cape", name: "Cape", category: "neckwear", price: 80, emoji: "🦸" },
+  { id: "scarf", name: "Scarf", category: "neckwear", price: 50, emoji: "🧣" },
   { id: "medal", name: "Medal", category: "neckwear", price: 90, emoji: "🏅" },
 ];
 
@@ -33,10 +34,77 @@ interface AccessoryState {
 }
 
 function defaultState(): AccessoryState {
-  return { owned: [], equipped: { hat: null, glasses: null, cape: null, neckwear: null } };
+  return { owned: [], equipped: { hat: null, glasses: null, neckwear: null } };
 }
 
-let state: AccessoryState = loadState();
+const MIGRATION_V1_KEY = "double-vision-accessories-migrated-v1";
+const MIGRATION_V2_KEY = "double-vision-accessories-migrated-v2";
+
+function migrateV1(s: AccessoryState): AccessoryState {
+  try {
+    if (localStorage.getItem(MIGRATION_V1_KEY)) return s;
+  } catch {
+    return s;
+  }
+
+  let hadOldScarf = false;
+  s.owned = s.owned.map(id => {
+    if (id === "scarf") {
+      hadOldScarf = true;
+      return "headband";
+    }
+    return id;
+  });
+  if (hadOldScarf) {
+    const seen = new Set<string>();
+    s.owned = s.owned.filter(id => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+
+  if (s.equipped["cape"] === "scarf") {
+    s.equipped["cape"] = null;
+    if (s.owned.includes("headband") && !s.equipped["hat"]) {
+      s.equipped["hat"] = "headband";
+    }
+  }
+
+  try {
+    localStorage.setItem(MIGRATION_V1_KEY, "1");
+  } catch {}
+  return s;
+}
+
+function migrateV2(s: AccessoryState): AccessoryState {
+  try {
+    if (localStorage.getItem(MIGRATION_V2_KEY)) return s;
+  } catch {
+    return s;
+  }
+
+  if (s.equipped["cape"]) {
+    if (!s.equipped["neckwear"]) {
+      s.equipped["neckwear"] = s.equipped["cape"];
+    }
+    delete s.equipped["cape"];
+  }
+
+  try {
+    localStorage.setItem(MIGRATION_V2_KEY, "1");
+  } catch {}
+  return s;
+}
+
+function migrateState(s: AccessoryState): AccessoryState {
+  s = migrateV1(s);
+  s = migrateV2(s);
+  return s;
+}
+
+let state: AccessoryState = migrateState(loadState());
+save();
 
 function loadState(): AccessoryState {
   try {
@@ -86,7 +154,7 @@ export function getEquipped(category: string): string | null {
 
 export function getEquippedAccessories(): Accessory[] {
   const result: Accessory[] = [];
-  for (const cat of ["hat", "glasses", "cape", "neckwear"]) {
+  for (const cat of ["hat", "glasses", "neckwear"]) {
     const id = state.equipped[cat];
     if (id) {
       const acc = ACCESSORIES.find(a => a.id === id);
@@ -174,6 +242,13 @@ function _drawAccessoryById(
       gfx.strokeEllipse(centerX, topY - 8, 24, 8);
       break;
     }
+    case "headband": {
+      gfx.fillStyle(0xcc3333, 0.9);
+      gfx.fillRect(centerX - bodyWidth / 2 - 1, topY - 4, bodyWidth + 2, 5);
+      gfx.fillStyle(0xeeee44, 1);
+      gfx.fillRect(centerX - 3, topY - 4, 6, 5);
+      break;
+    }
     case "sunglasses": {
       gfx.fillStyle(0x111111, 1);
       gfx.fillRect(centerX - EYE.SPACING - 5, eyeY - 3, 10, 7);
@@ -207,12 +282,14 @@ function _drawAccessoryById(
       break;
     }
     case "scarf": {
-      gfx.fillStyle(0xcc3333, 0.9);
-      gfx.fillRect(centerX - bodyWidth / 2 - 2, topY + 6, bodyWidth + 4, 6);
-      gfx.fillRect(centerX + bodyWidth / 2 - 2, topY + 12, 5, 10);
-      gfx.fillStyle(0xeeee44, 1);
-      gfx.fillRect(centerX + bodyWidth / 2 - 1, topY + 12, 3, 2);
-      gfx.fillRect(centerX + bodyWidth / 2 - 1, topY + 18, 3, 2);
+      const neckY = centerY - bodyHeight * 0.25;
+      gfx.fillStyle(0x2266aa, 0.9);
+      gfx.fillRect(centerX - bodyWidth / 2 - 2, neckY - 3, bodyWidth + 4, 8);
+      gfx.fillRect(centerX + bodyWidth / 2 - 3, neckY + 5, 6, 14);
+      gfx.fillStyle(0x3388cc, 1);
+      gfx.fillRect(centerX + bodyWidth / 2 - 2, neckY + 5, 4, 3);
+      gfx.fillRect(centerX + bodyWidth / 2 - 2, neckY + 11, 4, 3);
+      gfx.fillRect(centerX + bodyWidth / 2 - 4, neckY + 17, 8, 3);
       break;
     }
     case "bowtie": {

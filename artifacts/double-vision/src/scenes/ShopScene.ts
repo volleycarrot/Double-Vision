@@ -19,12 +19,11 @@ import {
 } from "../PlayerConfig";
 import { getBgColor } from "../GameSettings";
 
-type Category = "hat" | "glasses" | "cape" | "neckwear";
+type Category = "hat" | "glasses" | "neckwear";
 
 const CATEGORIES: { key: Category; label: string }[] = [
-  { key: "hat", label: "Hats" },
-  { key: "glasses", label: "Glasses" },
-  { key: "cape", label: "Capes" },
+  { key: "hat", label: "Headwear" },
+  { key: "glasses", label: "Eyewear" },
   { key: "neckwear", label: "Neckwear" },
 ];
 
