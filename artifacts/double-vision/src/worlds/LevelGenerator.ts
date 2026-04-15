@@ -91,7 +91,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
       if (rand() < 0.06 + difficulty * 0.08) {
         if (!hazardOccupied.has(x)) {
           if (isJungleWorld) {
-            const patchWidth = 1 + Math.floor(rand() * 3);
+            const patchWidth = 2 + Math.floor(rand() * 2);
             let canPlace = true;
             for (let p = 0; p < patchWidth; p++) {
               const col = x + p;
