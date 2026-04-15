@@ -495,19 +495,19 @@ export class ShopScene extends Phaser.Scene {
       this.previewLabel = null;
     }
 
-    const previewX = width - 80;
+    const previewX = width - 120;
     const previewY = height / 2 + 40;
-    const bodyW = 42;
-    const bodyH = 56;
+    const bodyW = 84;
+    const bodyH = 112;
     const color = getSelectedColor();
 
     this.previewGfx = this.add.graphics().setDepth(50);
     const gfx = this.previewGfx;
 
     gfx.fillStyle(0x111122, 0.6);
-    gfx.fillRoundedRect(previewX - 45, previewY - 55, 90, 120, 8);
+    gfx.fillRoundedRect(previewX - 90, previewY - 110, 180, 240, 12);
     gfx.lineStyle(1, 0x333355, 1);
-    gfx.strokeRoundedRect(previewX - 45, previewY - 55, 90, 120, 8);
+    gfx.strokeRoundedRect(previewX - 90, previewY - 110, 180, 240, 12);
 
     gfx.fillStyle(color.fill, 1);
     gfx.fillRect(previewX - bodyW / 2, previewY - bodyH / 2, bodyW, bodyH);
@@ -532,8 +532,8 @@ export class ShopScene extends Phaser.Scene {
     drawAccessories(gfx, previewX, previewY, bodyW, bodyH, color.fill);
 
     this.previewLabel = this.add
-      .text(previewX, previewY + 50, "Preview", {
-        fontSize: "10px",
+      .text(previewX, previewY + 105, "Preview", {
+        fontSize: "18px",
         fontFamily: "monospace",
         color: "#888888",
       })
