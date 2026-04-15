@@ -35,7 +35,7 @@ export class GameScene extends Phaser.Scene {
   private lavaSplashGfx: Phaser.GameObjects.Graphics | null = null;
   private sprayTimers: { sprite: Phaser.GameObjects.Rectangle; timer: number; active: boolean; baseY: number; gfx?: Phaser.GameObjects.Graphics; dome?: Phaser.GameObjects.Graphics }[] = [];
   private landslideData: { tile: Phaser.GameObjects.Rectangle; dir: number; speed: number; gfx: Phaser.GameObjects.Graphics; timer: number; tileWidth: number }[] = [];
-  private activeWaves: { gfx: Phaser.GameObjects.Graphics; x: number; y: number; targetX: number; speed: number; life: number; maxLife: number; catching: boolean }[] = [];
+  private activeWaves: { sprite: Phaser.GameObjects.Image; x: number; y: number; targetX: number; speed: number; life: number; maxLife: number; catching: boolean }[] = [];
   private waveSpawnTimer: number = 0;
   private waveSpawnInterval: number = 2500;
   private oceanGfx: Phaser.GameObjects.Graphics | null = null;
@@ -55,6 +55,11 @@ export class GameScene extends Phaser.Scene {
 
   constructor() {
     super({ key: "GameScene" });
+  }
+
+  preload() {
+    const base = (import.meta as any).env?.BASE_URL || "/";
+    this.load.image("wave", `${base}wave.png`);
   }
 
   create(data: { worldIndex: number; deaths: number; startTime: number }) {
@@ -917,128 +922,36 @@ export class GameScene extends Phaser.Scene {
       w.x += w.speed * (delta / 1000);
 
       const waveW = TILE * 5;
-      const waveH = TILE * 4;
+      const waveH = TILE * 4.5;
       const cx = w.x;
       const bottom = screenBottom + 4;
       const waveTop = bottom - waveH;
-      const left = cx - waveW / 2;
-      const segments = 24;
 
       const fadeIn = Math.min(w.life / 500, 1);
       const fadeOut = progress > 0.85 ? 1 - (progress - 0.85) / 0.15 : 1;
       const alpha = fadeIn * fadeOut;
 
-      w.gfx.clear();
-
-      w.gfx.fillStyle(0x003855, 0.6 * alpha);
-      w.gfx.beginPath();
-      w.gfx.moveTo(left, bottom);
-      for (let s = 0; s <= segments; s++) {
-        const t = s / segments;
-        const sx = left + t * waveW;
-        const sy = waveTop + waveH * 0.55 + Math.sin(w.life * 0.003 + t * Math.PI * 2) * 6;
-        w.gfx.lineTo(sx, sy);
-      }
-      w.gfx.lineTo(left + waveW, bottom);
-      w.gfx.closePath();
-      w.gfx.fillPath();
-
-      w.gfx.fillStyle(0x005f8f, 0.65 * alpha);
-      w.gfx.beginPath();
-      w.gfx.moveTo(left, bottom);
-      for (let s = 0; s <= segments; s++) {
-        const t = s / segments;
-        const sx = left + t * waveW;
-        const baseAmp = 8 + Math.sin(t * Math.PI) * 6;
-        const sy = waveTop + waveH * 0.4 + Math.sin(w.life * 0.004 + t * Math.PI * 2) * baseAmp;
-        w.gfx.lineTo(sx, sy);
-      }
-      w.gfx.lineTo(left + waveW, bottom);
-      w.gfx.closePath();
-      w.gfx.fillPath();
-
-      w.gfx.fillStyle(0x0088cc, 0.75 * alpha);
-      w.gfx.beginPath();
-      w.gfx.moveTo(left, bottom);
-      for (let s = 0; s <= segments; s++) {
-        const t = s / segments;
-        const sx = left + t * waveW;
-        const curlFactor = Math.pow(Math.sin(t * Math.PI), 2);
-        const crestH = 12 * curlFactor;
-        const sy = waveTop + waveH * 0.25
-          + Math.sin(w.life * 0.005 + t * Math.PI * 2.5) * (5 + crestH)
-          - crestH * Math.sin(w.life * 0.003);
-        w.gfx.lineTo(sx, sy);
-      }
-      w.gfx.lineTo(left + waveW, bottom);
-      w.gfx.closePath();
-      w.gfx.fillPath();
-
-      w.gfx.fillStyle(0x00bbff, 0.85 * alpha);
-      w.gfx.beginPath();
-      const crestStart = 0.1;
-      const crestEnd = 0.7;
-      const crestBaseY = waveTop + waveH * 0.18;
-      w.gfx.moveTo(left + crestStart * waveW, crestBaseY + 12);
-      for (let s = 0; s <= 20; s++) {
-        const t = crestStart + (s / 20) * (crestEnd - crestStart);
-        const sx = left + t * waveW;
-        const curl = Math.sin((t - crestStart) / (crestEnd - crestStart) * Math.PI);
-        const sy = crestBaseY - curl * 20 * Math.abs(Math.sin(w.life * 0.004))
-          + Math.sin(w.life * 0.007 + t * 8) * 2;
-        w.gfx.lineTo(sx, sy);
-      }
-      for (let s = 20; s >= 0; s--) {
-        const t = crestStart + (s / 20) * (crestEnd - crestStart);
-        const sx = left + t * waveW;
-        const curl = Math.sin((t - crestStart) / (crestEnd - crestStart) * Math.PI);
-        const sy = crestBaseY + 6 - curl * 6;
-        w.gfx.lineTo(sx, sy);
-      }
-      w.gfx.closePath();
-      w.gfx.fillPath();
-
-      w.gfx.fillStyle(0xffffff, 0.7 * alpha);
-      for (let f = 0; f < 8; f++) {
-        const ft = crestStart + 0.03 + (f / 8) * (crestEnd - crestStart - 0.06);
-        const fx = left + ft * waveW;
-        const foamY = crestBaseY - Math.sin((ft - crestStart) / (crestEnd - crestStart) * Math.PI) * 14
-          + Math.sin(w.life * 0.008 + f * 2) * 3;
-        const foamSize = 2.5 + Math.sin(w.life * 0.006 + f) * 1.5;
-        w.gfx.fillCircle(fx, foamY, foamSize);
-      }
-
-      w.gfx.lineStyle(1.5, 0xffffff, 0.3 * alpha);
-      for (let r = 0; r < 2; r++) {
-        const rippleY = waveTop + waveH * (0.5 + r * 0.18);
-        w.gfx.beginPath();
-        w.gfx.moveTo(left + waveW * 0.05, rippleY);
-        for (let s = 0; s <= 14; s++) {
-          const t = s / 14;
-          const sx = left + waveW * 0.05 + t * waveW * 0.9;
-          const sy = rippleY + Math.sin(w.life * 0.005 + t * Math.PI * 3 + r * 1.5) * 3;
-          w.gfx.lineTo(sx, sy);
-        }
-        w.gfx.strokePath();
-      }
+      const bob = Math.sin(w.life * 0.003) * 4;
+      w.sprite.setPosition(cx, bottom + bob);
+      w.sprite.setAlpha(alpha);
 
       const hitLeft = cx - waveW / 2;
       const hitTop = waveTop + waveH * 0.15;
       const hitW = waveW;
-      const hitH = waveH * 0.6;
+      const hitH = waveH * 0.55;
       const hitRect = new Phaser.Geom.Rectangle(hitLeft, hitTop, hitW, hitH);
       if (Phaser.Geom.Rectangle.Overlaps(playerBounds, hitRect)) {
         w.catching = true;
         if (!this.isDucking) {
           this.player.body.setVelocityX(w.speed * 0.9);
-          this.player.body.setVelocityY(Math.min(this.player.body.velocity.y, -40));
+          this.player.body.setVelocityY(Math.min(this.player.body.velocity.y, -180));
         }
       } else {
         w.catching = false;
       }
 
       if (w.life >= w.maxLife) {
-        w.gfx.destroy();
+        w.sprite.destroy();
         this.activeWaves.splice(i, 1);
       }
     }
@@ -1055,10 +968,17 @@ export class GameScene extends Phaser.Scene {
     const targetX = startX + travelDist;
     const maxLife = Math.abs(travelDist / speed) * 1000;
 
-    const gfx = this.add.graphics().setDepth(50);
+    const waveW = TILE * 5;
+    const waveH = TILE * 4.5;
+    const sprite = this.add.image(startX, 0, "wave").setDepth(50);
+    sprite.setDisplaySize(waveW, waveH);
+    sprite.setOrigin(0.5, 1);
+    if (!fromLeft) {
+      sprite.setFlipX(true);
+    }
 
     this.activeWaves.push({
-      gfx,
+      sprite,
       x: startX,
       y: 0,
       targetX,
