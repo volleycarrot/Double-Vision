@@ -546,9 +546,10 @@ export class TitleScene extends Phaser.Scene {
     }
   }
 
-  private addSettingsButton(leftCenterX: number, height: number) {
-    const gearX = leftCenterX + 240;
-    const gearY = height * 0.48 - 40;
+  private addSettingsButton(_leftCenterX: number, _height: number) {
+    const { width } = this.scale;
+    const gearX = width - 78;
+    const gearY = 20;
 
     const gearBg = this.add.rectangle(gearX, gearY, 36, 36, 0x16213e, 0.9);
     gearBg.setStrokeStyle(2, 0x0f3460);
@@ -574,31 +575,44 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private addShopButton(leftCenterX: number, height: number) {
-    const shopX = leftCenterX + 200;
-    const shopY = height * 0.48 - 40;
+    const shopX = leftCenterX + 160;
+    const shopY = height * 0.48 - 30;
 
-    const shopBg = this.add.rectangle(shopX, shopY, 36, 36, 0x16213e, 0.9);
+    const btnWidth = 140;
+    const btnHeight = 48;
+
+    const shopBg = this.add.rectangle(shopX, shopY, btnWidth, btnHeight, 0x16213e, 0.9);
     shopBg.setStrokeStyle(2, 0x0f3460);
     shopBg.setInteractive({ useHandCursor: true });
 
-    const shopIcon = this.add.text(shopX, shopY, "🛒", {
-      fontSize: "20px",
+    const shopIcon = this.add.text(shopX - 30, shopY, "🛒", {
+      fontSize: "24px",
+    }).setOrigin(0.5);
+
+    const shopLabel = this.add.text(shopX + 14, shopY, "Shop", {
+      fontSize: "18px",
+      fontFamily: "Arial, sans-serif",
+      color: "#e0e0e0",
+      fontStyle: "bold",
     }).setOrigin(0.5);
 
     shopBg.on("pointerover", () => {
       shopBg.setFillStyle(0x1e2d4a, 1);
+      shopLabel.setColor("#ffffff");
     });
     shopBg.on("pointerout", () => {
       shopBg.setFillStyle(0x16213e, 0.9);
+      shopLabel.setColor("#e0e0e0");
     });
     shopBg.on("pointerdown", () => {
       if (!this.settingsOpen) this.scene.start("ShopScene");
     });
   }
 
-  private addStatsButton(leftCenterX: number, height: number) {
-    const statsX = leftCenterX + 160;
-    const statsY = height * 0.48 - 40;
+  private addStatsButton(_leftCenterX: number, _height: number) {
+    const { width } = this.scale;
+    const statsX = width - 38;
+    const statsY = 20;
 
     const statsBg = this.add.rectangle(statsX, statsY, 36, 36, 0x16213e, 0.9);
     statsBg.setStrokeStyle(2, 0x0f3460);
