@@ -263,6 +263,67 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
   }
 
+  const MAX_CONSECUTIVE_UNSAFE = 5;
+  const isColumnUnsafe = (col: number): boolean => {
+    const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
+    if (!hasGround) return true;
+    const hasHazard = tiles.some(t =>
+      (t.type === "kill" || t.type === "spike" || t.type === "movement") &&
+      t.x <= col && col < t.x + (t.width ?? 1) &&
+      (t.y === groundLevel || t.y === groundLevel - 1)
+    );
+    return hasHazard;
+  };
+  for (let x = 0; x < LEVEL_WIDTH; x++) {
+    const isUnsafe = isColumnUnsafe(x);
+
+    if (isUnsafe) {
+      let runStart = x;
+      let runLen = 1;
+      while (runLen < MAX_CONSECUTIVE_UNSAFE && x + 1 < LEVEL_WIDTH) {
+        const nextX = x + 1;
+        const nextUnsafe = isColumnUnsafe(nextX);
+        if (!nextUnsafe) break;
+        x++;
+        runLen++;
+      }
+
+      if (runLen >= MAX_CONSECUTIVE_UNSAFE) {
+        const safeX = runStart + MAX_CONSECUTIVE_UNSAFE;
+        if (safeX < LEVEL_WIDTH) {
+          for (let i = tiles.length - 1; i >= 0; i--) {
+            const t = tiles[i];
+            if ((t.type === "kill" || t.type === "spike" || t.type === "movement") &&
+                t.x <= safeX && safeX < t.x + (t.width ?? 1) &&
+                (t.y === groundLevel || t.y === groundLevel - 1)) {
+              if (t.width && t.width > 1) {
+                const origX = t.x;
+                const origWidth = t.width;
+                tiles.splice(i, 1);
+                if (safeX > origX) {
+                  tiles.push({ ...t, x: origX, width: safeX - origX });
+                }
+                if (origX + origWidth > safeX + 1) {
+                  tiles.push({ ...t, x: safeX + 1, width: origX + origWidth - safeX - 1 });
+                }
+              } else {
+                tiles.splice(i, 1);
+              }
+            }
+          }
+          noGroundColumns.delete(safeX);
+          hazardOccupied.delete(safeX);
+          quicksandColumns.delete(safeX);
+          const hasGroundNow = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === safeX);
+          if (!hasGroundNow) {
+            tiles.push({ x: safeX, y: groundLevel, type: "ground" });
+            tiles.push({ x: safeX, y: groundLevel + 1, type: "ground" });
+          }
+        }
+      }
+    }
+  }
+
   const clearRadius = 2;
   const checkpointXs = tiles.filter(t => t.type === "checkpoint").map(t => t.x);
   const hazardTypes = new Set(["kill", "spike", "movement"]);
