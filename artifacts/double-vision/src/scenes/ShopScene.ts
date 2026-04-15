@@ -27,6 +27,13 @@ const CATEGORIES: { key: Category; label: string }[] = [
   { key: "neckwear", label: "Neckwear" },
 ];
 
+const LIST_TOP = 130;
+const LIST_BOTTOM_MARGIN = 40;
+const ITEM_H = 56;
+const ITEM_GAP = 8;
+const SCROLL_SPEED = 20;
+const FADE_HEIGHT = 24;
+
 export class ShopScene extends Phaser.Scene {
   private selectedCategory: Category = "hat";
   private dynamicObjects: Phaser.GameObjects.GameObject[] = [];
@@ -35,6 +42,21 @@ export class ShopScene extends Phaser.Scene {
   private coinText!: Phaser.GameObjects.Text;
   private messageText: Phaser.GameObjects.Text | null = null;
   private messageTimer: Phaser.Time.TimerEvent | null = null;
+
+  private scrollContainer: Phaser.GameObjects.Container | null = null;
+  private scrollMaskGraphics: Phaser.GameObjects.Graphics | null = null;
+  private scrollY = 0;
+  private maxScroll = 0;
+  private listHeight = 0;
+  private isDragging = false;
+  private dragStartY = 0;
+  private dragStartScroll = 0;
+  private fadeTopGfx: Phaser.GameObjects.Graphics | null = null;
+  private fadeBotGfx: Phaser.GameObjects.Graphics | null = null;
+  private scrollbarGfx: Phaser.GameObjects.Graphics | null = null;
+  private itemButtons: { obj: Phaser.GameObjects.Rectangle; localY: number }[] = [];
+  private boundPointermove: ((pointer: Phaser.Input.Pointer) => void) | null = null;
+  private boundPointerup: (() => void) | null = null;
 
   constructor() {
     super({ key: "ShopScene" });
@@ -46,6 +68,14 @@ export class ShopScene extends Phaser.Scene {
     this.previewGfx = null;
     this.messageText = null;
     this.messageTimer = null;
+    this.scrollContainer = null;
+    this.scrollMaskGraphics = null;
+    this.scrollY = 0;
+    this.isDragging = false;
+    this.fadeTopGfx = null;
+    this.fadeBotGfx = null;
+    this.scrollbarGfx = null;
+    this.itemButtons = [];
 
     const { width, height } = this.scale;
     const bg = getBgColor();
@@ -86,6 +116,19 @@ export class ShopScene extends Phaser.Scene {
     );
     escKey.on("down", () => this.scene.start("TitleScene"));
 
+    this.boundPointermove = (pointer: Phaser.Input.Pointer) => {
+      if (this.isDragging) {
+        const dy = this.dragStartY - pointer.y;
+        this.scrollY = Phaser.Math.Clamp(this.dragStartScroll + dy, 0, this.maxScroll);
+        this.applyScroll();
+      }
+    };
+    this.boundPointerup = () => {
+      this.isDragging = false;
+    };
+    this.input.on("pointermove", this.boundPointermove);
+    this.input.on("pointerup", this.boundPointerup);
+
     this.renderCategoryTabs(width);
     this.renderItems();
     this.renderPreview(width, height);
@@ -94,6 +137,12 @@ export class ShopScene extends Phaser.Scene {
       if (this.messageTimer) {
         this.messageTimer.destroy();
         this.messageTimer = null;
+      }
+      if (this.boundPointermove) {
+        this.input.off("pointermove", this.boundPointermove);
+      }
+      if (this.boundPointerup) {
+        this.input.off("pointerup", this.boundPointerup);
       }
     });
   }
@@ -139,55 +188,107 @@ export class ShopScene extends Phaser.Scene {
   private renderItems() {
     this.dynamicObjects.forEach((o) => o.destroy());
     this.dynamicObjects = [];
+    this.itemButtons = [];
+    if (this.scrollContainer) {
+      this.scrollContainer.destroy();
+      this.scrollContainer = null;
+    }
+    if (this.scrollMaskGraphics) {
+      this.scrollMaskGraphics.destroy();
+      this.scrollMaskGraphics = null;
+    }
+    if (this.fadeTopGfx) {
+      this.fadeTopGfx.destroy();
+      this.fadeTopGfx = null;
+    }
+    if (this.fadeBotGfx) {
+      this.fadeBotGfx.destroy();
+      this.fadeBotGfx = null;
+    }
+    if (this.scrollbarGfx) {
+      this.scrollbarGfx.destroy();
+      this.scrollbarGfx = null;
+    }
 
     const items = ACCESSORIES.filter(
       (a) => a.category === this.selectedCategory,
     );
-    const startY = 130;
-    const itemH = 56;
     const itemW = 360;
-    const { width } = this.scale;
+    const { width, height } = this.scale;
     const listX = width / 2 - 100;
+    const visibleHeight = height - LIST_TOP - LIST_BOTTOM_MARGIN;
+    const contentHeight = items.length * (ITEM_H + ITEM_GAP) - ITEM_GAP;
+
+    this.listHeight = visibleHeight;
+    this.maxScroll = Math.max(0, contentHeight - visibleHeight);
+    this.scrollY = Math.min(this.scrollY, this.maxScroll);
+
+    this.scrollContainer = this.add.container(0, LIST_TOP);
+    this.scrollContainer.setDepth(10);
+
+    const maskGfx = this.add.graphics();
+    maskGfx.setVisible(false);
+    maskGfx.fillStyle(0xffffff);
+    maskGfx.fillRect(listX - itemW / 2 - 10, LIST_TOP, itemW + 20, visibleHeight);
+    this.scrollMaskGraphics = maskGfx;
+    const mask = maskGfx.createGeometryMask();
+    this.scrollContainer.setMask(mask);
+
+    const hitArea = this.add.rectangle(
+      listX, LIST_TOP + visibleHeight / 2, itemW + 20, visibleHeight, 0x000000, 0
+    ).setInteractive().setDepth(5);
+    this.dynamicObjects.push(hitArea);
+
+    hitArea.on("wheel", (_pointer: Phaser.Input.Pointer, _dx: number, dy: number, _dz: number) => {
+      this.scrollY = Phaser.Math.Clamp(this.scrollY + dy * SCROLL_SPEED * 0.05, 0, this.maxScroll);
+      this.applyScroll();
+    });
+
+    hitArea.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      this.isDragging = true;
+      this.dragStartY = pointer.y;
+      this.dragStartScroll = this.scrollY;
+    });
 
     items.forEach((item, i) => {
-      const y = startY + i * (itemH + 8);
+      const y = i * (ITEM_H + ITEM_GAP);
       const owned = isOwned(item.id);
       const equipped = getEquipped(item.category) === item.id;
 
-      const bg = this.add.rectangle(listX, y + itemH / 2, itemW, itemH, 0x16213e, 0.9);
+      const bg = this.add.rectangle(listX, y + ITEM_H / 2, itemW, ITEM_H, 0x16213e, 0.9);
       bg.setStrokeStyle(2, equipped ? 0x00ff88 : owned ? 0x335588 : 0x222244);
-      this.dynamicObjects.push(bg);
+      this.scrollContainer!.add(bg);
 
       const emoji = this.add
-        .text(listX - itemW / 2 + 24, y + itemH / 2, item.emoji, {
+        .text(listX - itemW / 2 + 24, y + ITEM_H / 2, item.emoji, {
           fontSize: "24px",
         })
         .setOrigin(0.5);
-      this.dynamicObjects.push(emoji);
+      this.scrollContainer!.add(emoji);
 
       const name = this.add
-        .text(listX - itemW / 2 + 56, y + itemH / 2 - 8, item.name, {
+        .text(listX - itemW / 2 + 56, y + ITEM_H / 2 - 8, item.name, {
           fontSize: "14px",
           fontFamily: "monospace",
           color: equipped ? "#00ff88" : "#ffffff",
           fontStyle: equipped ? "bold" : "normal",
         })
         .setOrigin(0, 0);
-      this.dynamicObjects.push(name);
+      this.scrollContainer!.add(name);
 
       if (!owned) {
         const priceText = this.add
-          .text(listX - itemW / 2 + 56, y + itemH / 2 + 8, `${item.price} coins`, {
+          .text(listX - itemW / 2 + 56, y + ITEM_H / 2 + 8, `${item.price} coins`, {
             fontSize: "11px",
             fontFamily: "monospace",
             color: "#ffdd44",
           })
           .setOrigin(0, 0);
-        this.dynamicObjects.push(priceText);
+        this.scrollContainer!.add(priceText);
       }
 
       const btnX = listX + itemW / 2 - 50;
-      const btnY = y + itemH / 2;
+      const btnY = y + ITEM_H / 2;
 
       if (!owned) {
         this.createButton(
@@ -211,6 +312,77 @@ export class ShopScene extends Phaser.Scene {
         });
       }
     });
+
+    this.renderScrollIndicators(listX, itemW, visibleHeight);
+    this.applyScroll();
+  }
+
+  private renderScrollIndicators(listX: number, itemW: number, visibleHeight: number) {
+    if (this.maxScroll <= 0) return;
+
+    this.fadeTopGfx = this.add.graphics().setDepth(20);
+    this.fadeBotGfx = this.add.graphics().setDepth(20);
+
+    const left = listX - itemW / 2 - 10;
+    const fadeW = itemW + 20;
+
+    this.fadeTopGfx.fillGradientStyle(0x0a0a1e, 0x0a0a1e, 0x0a0a1e, 0x0a0a1e, 1, 1, 0, 0);
+    this.fadeTopGfx.fillRect(left, LIST_TOP, fadeW, FADE_HEIGHT);
+
+    this.fadeBotGfx.fillGradientStyle(0x0a0a1e, 0x0a0a1e, 0x0a0a1e, 0x0a0a1e, 0, 0, 1, 1);
+    this.fadeBotGfx.fillRect(left, LIST_TOP + visibleHeight - FADE_HEIGHT, fadeW, FADE_HEIGHT);
+
+    const sbX = listX + itemW / 2 + 6;
+    const sbH = visibleHeight;
+    this.scrollbarGfx = this.add.graphics().setDepth(20);
+    this.scrollbarGfx.fillStyle(0x222244, 0.5);
+    this.scrollbarGfx.fillRoundedRect(sbX, LIST_TOP, 4, sbH, 2);
+
+    this.updateScrollIndicators();
+  }
+
+  private updateScrollIndicators() {
+    if (this.fadeTopGfx) {
+      this.fadeTopGfx.setAlpha(this.scrollY > 0 ? 1 : 0);
+    }
+    if (this.fadeBotGfx) {
+      this.fadeBotGfx.setAlpha(this.scrollY < this.maxScroll ? 1 : 0);
+    }
+    if (this.scrollbarGfx && this.maxScroll > 0) {
+      this.scrollbarGfx.clear();
+
+      const { width } = this.scale;
+      const itemW = 360;
+      const listX = width / 2 - 100;
+      const sbX = listX + itemW / 2 + 6;
+      const sbTrackH = this.listHeight;
+
+      this.scrollbarGfx.fillStyle(0x222244, 0.3);
+      this.scrollbarGfx.fillRoundedRect(sbX, LIST_TOP, 4, sbTrackH, 2);
+
+      const thumbRatio = this.listHeight / (this.listHeight + this.maxScroll);
+      const thumbH = Math.max(20, sbTrackH * thumbRatio);
+      const thumbY = LIST_TOP + (this.scrollY / this.maxScroll) * (sbTrackH - thumbH);
+
+      this.scrollbarGfx.fillStyle(0x4488cc, 0.7);
+      this.scrollbarGfx.fillRoundedRect(sbX, thumbY, 4, thumbH, 2);
+    }
+  }
+
+  private applyScroll() {
+    if (this.scrollContainer) {
+      this.scrollContainer.y = LIST_TOP - this.scrollY;
+    }
+    for (const btn of this.itemButtons) {
+      const worldY = btn.localY + LIST_TOP - this.scrollY;
+      const visible = worldY > LIST_TOP - ITEM_H / 2 && worldY < LIST_TOP + this.listHeight + ITEM_H / 2;
+      if (visible) {
+        btn.obj.setInteractive();
+      } else {
+        btn.obj.disableInteractive();
+      }
+    }
+    this.updateScrollIndicators();
   }
 
   private createButton(
@@ -225,7 +397,12 @@ export class ShopScene extends Phaser.Scene {
     const bg = this.add.rectangle(x, y, w, h, color, 0.95);
     bg.setStrokeStyle(1, 0x555555);
     bg.setInteractive({ useHandCursor: true });
-    this.dynamicObjects.push(bg);
+    if (this.scrollContainer) {
+      this.scrollContainer.add(bg);
+      this.itemButtons.push({ obj: bg, localY: y });
+    } else {
+      this.dynamicObjects.push(bg);
+    }
 
     const label = this.add
       .text(x, y, text, {
@@ -235,7 +412,11 @@ export class ShopScene extends Phaser.Scene {
         fontStyle: "bold",
       })
       .setOrigin(0.5);
-    this.dynamicObjects.push(label);
+    if (this.scrollContainer) {
+      this.scrollContainer.add(label);
+    } else {
+      this.dynamicObjects.push(label);
+    }
 
     bg.on("pointerover", () => bg.setAlpha(0.8));
     bg.on("pointerout", () => bg.setAlpha(1));
