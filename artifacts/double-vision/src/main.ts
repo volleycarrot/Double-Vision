@@ -8,6 +8,7 @@ import { ShopScene } from "./scenes/ShopScene";
 import { WarningScene } from "./scenes/WarningScene";
 import { GameScene } from "./scenes/GameScene";
 import { WinScene } from "./scenes/WinScene";
+import { InputModeSelectScene } from "./scenes/InputModeSelectScene";
 
 const basePath = (import.meta as any).env?.BASE_URL || "/";
 
@@ -28,10 +29,14 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
+  input: {
+    activePointers: 4,
+  },
   dom: { createContainer: true },
   scene: [
     StartScene,
     AuthScene,
+    InputModeSelectScene,
     ModeSelectScene,
     LobbyScene,
     TitleScene,

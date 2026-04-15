@@ -4,7 +4,7 @@ import { loadProgress } from "../ProgressManager";
 import { COLOR_PRESETS, getSelectedColor, getSelectedColorIndex, setSelectedColorIndex, EYE, getEyeOffsetY } from "../PlayerConfig";
 import type { GameMode } from "./ModeSelectScene";
 import { getBindings, getKeyName, setBinding, resetBindings, isReservedKey, isArrowNavKey, isLetterKey, type ControlBindings } from "../KeyBindings";
-import { getBgColor, getSettings, setMusicEnabled, setBgColorIndex, BG_PRESETS } from "../GameSettings";
+import { getBgColor, getSettings, setMusicEnabled, setBgColorIndex, BG_PRESETS, getInputMode, setInputMode, getControlsFlipped, setControlsFlipped, type InputMode } from "../GameSettings";
 import { toggleMusic } from "../MusicManager";
 import { onlineManager } from "../OnlineMultiplayerManager";
 import { isLoggedIn, getUsername, logout } from "../AuthManager";
@@ -386,12 +386,13 @@ export class TitleScene extends Phaser.Scene {
       });
       this.controlTexts.push(guestVal);
     } else if (this.gameMode === "single") {
+      const isMobile = getInputMode() === "mobile";
       const controlBoxH = 120;
       const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
       controlBg.setStrokeStyle(2, 0x0f3460);
       this.controlTexts.push(controlBg);
 
-      const header = this.add.text(leftCenterX, controlBoxY - 40, "CONTROLS", {
+      const header = this.add.text(leftCenterX, controlBoxY - 40, isMobile ? "TOUCH CONTROLS" : "CONTROLS", {
         fontSize: "16px",
         fontFamily: "monospace",
         color: "#e94560",
@@ -402,40 +403,75 @@ export class TitleScene extends Phaser.Scene {
       const textLeftX = leftCenterX - controlBoxW / 2 + 20;
       const textRightX = leftCenterX - controlBoxW / 2 + 130;
 
-      const moveLabel = this.add.text(textLeftX, controlBoxY - 14, "Move:", {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#ffcc00",
-      });
-      this.controlTexts.push(moveLabel);
+      if (isMobile) {
+        const flipped = getControlsFlipped();
+        const moveSide = flipped ? "bottom-right" : "bottom-left";
+        const actSide = flipped ? "bottom-left" : "bottom-right";
 
-      const moveVal = this.add.text(textRightX, controlBoxY - 14, `${getKeyName(bindings.left)} = Left  |  ${getKeyName(bindings.right)} = Right`, {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#ffffff",
-      });
-      this.controlTexts.push(moveVal);
+        const moveLabel = this.add.text(textLeftX, controlBoxY - 14, "Move:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffcc00",
+        });
+        this.controlTexts.push(moveLabel);
 
-      const actLabel = this.add.text(textLeftX, controlBoxY + 10, "Actions:", {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#ffcc00",
-      });
-      this.controlTexts.push(actLabel);
+        const moveVal = this.add.text(textRightX, controlBoxY - 14, `◀ ▶  buttons (${moveSide})`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(moveVal);
 
-      const actVal = this.add.text(textRightX, controlBoxY + 10, `${getKeyName(bindings.jump)} = Jump  |  ${getKeyName(bindings.duck)} = Duck`, {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#ffffff",
-      });
-      this.controlTexts.push(actVal);
+        const actLabel = this.add.text(textLeftX, controlBoxY + 10, "Actions:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffcc00",
+        });
+        this.controlTexts.push(actLabel);
+
+        const actVal = this.add.text(textRightX, controlBoxY + 10, `▲ Jump  ▼ Duck (${actSide})`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(actVal);
+      } else {
+        const moveLabel = this.add.text(textLeftX, controlBoxY - 14, "Move:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffcc00",
+        });
+        this.controlTexts.push(moveLabel);
+
+        const moveVal = this.add.text(textRightX, controlBoxY - 14, `${getKeyName(bindings.left)} = Left  |  ${getKeyName(bindings.right)} = Right`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(moveVal);
+
+        const actLabel = this.add.text(textLeftX, controlBoxY + 10, "Actions:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffcc00",
+        });
+        this.controlTexts.push(actLabel);
+
+        const actVal = this.add.text(textRightX, controlBoxY + 10, `${getKeyName(bindings.jump)} = Jump  |  ${getKeyName(bindings.duck)} = Duck`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(actVal);
+      }
     } else {
+      const isMobile = getInputMode() === "mobile";
       const controlBoxH = 120;
       const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
       controlBg.setStrokeStyle(2, 0x0f3460);
       this.controlTexts.push(controlBg);
 
-      const header = this.add.text(leftCenterX, controlBoxY - 40, "CONTROLS", {
+      const header = this.add.text(leftCenterX, controlBoxY - 40, isMobile ? "TOUCH CONTROLS" : "CONTROLS", {
         fontSize: "16px",
         fontFamily: "monospace",
         color: "#e94560",
@@ -446,33 +482,67 @@ export class TitleScene extends Phaser.Scene {
       const textLeftX = leftCenterX - controlBoxW / 2 + 20;
       const textRightX = leftCenterX - controlBoxW / 2 + 170;
 
-      const p1Label = this.add.text(textLeftX, controlBoxY - 12, "Player 1:", {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#ffcc00",
-      });
-      this.controlTexts.push(p1Label);
+      if (isMobile) {
+        const flipped = getControlsFlipped();
+        const moveSide = flipped ? "bottom-right" : "bottom-left";
+        const actSide = flipped ? "bottom-left" : "bottom-right";
 
-      const p1Val = this.add.text(textRightX, controlBoxY - 12, `${getKeyName(bindings.jump)} = Jump  |  ${getKeyName(bindings.duck)} = Duck`, {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#ffffff",
-      });
-      this.controlTexts.push(p1Val);
+        const moveLabel = this.add.text(textLeftX, controlBoxY - 12, "Move:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffcc00",
+        });
+        this.controlTexts.push(moveLabel);
 
-      const p2Label = this.add.text(textLeftX, controlBoxY + 14, "Player 2:", {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#00ccff",
-      });
-      this.controlTexts.push(p2Label);
+        const moveVal = this.add.text(textRightX, controlBoxY - 12, `◀ ▶  buttons (${moveSide})`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(moveVal);
 
-      const p2Val = this.add.text(textRightX, controlBoxY + 14, `${getKeyName(bindings.left)} = Left  |  ${getKeyName(bindings.right)} = Right`, {
-        fontSize: "14px",
-        fontFamily: "monospace",
-        color: "#ffffff",
-      });
-      this.controlTexts.push(p2Val);
+        const actLabel = this.add.text(textLeftX, controlBoxY + 14, "Actions:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#00ccff",
+        });
+        this.controlTexts.push(actLabel);
+
+        const actVal = this.add.text(textRightX, controlBoxY + 14, `▲ Jump  ▼ Duck (${actSide})`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(actVal);
+      } else {
+        const p1Label = this.add.text(textLeftX, controlBoxY - 12, "Player 1:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffcc00",
+        });
+        this.controlTexts.push(p1Label);
+
+        const p1Val = this.add.text(textRightX, controlBoxY - 12, `${getKeyName(bindings.jump)} = Jump  |  ${getKeyName(bindings.duck)} = Duck`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(p1Val);
+
+        const p2Label = this.add.text(textLeftX, controlBoxY + 14, "Player 2:", {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#00ccff",
+        });
+        this.controlTexts.push(p2Label);
+
+        const p2Val = this.add.text(textRightX, controlBoxY + 14, `${getKeyName(bindings.left)} = Left  |  ${getKeyName(bindings.right)} = Right`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+        });
+        this.controlTexts.push(p2Val);
+      }
     }
   }
 
@@ -633,7 +703,7 @@ export class TitleScene extends Phaser.Scene {
 
   private getModalDimensions() {
     const modalW = 440;
-    const modalH = this.gameMode === "multiplayer" ? 460 : 420;
+    const modalH = this.gameMode === "multiplayer" ? 500 : 460;
     return { modalW, modalH };
   }
 
@@ -744,6 +814,56 @@ export class TitleScene extends Phaser.Scene {
 
     curY += 32;
 
+    const inputModeLabel = this.add.text(leftX, curY, "Input Mode:", {
+      fontSize: "13px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+    }).setOrigin(0, 0.5);
+    this.settingsDynamicObjects.push(inputModeLabel);
+
+    const currentMode = getInputMode();
+    const kbBtnX = modalX + modalW / 2 - 120;
+    const mbBtnX = modalX + modalW / 2 - 50;
+
+    const kbBg = this.add.rectangle(kbBtnX, curY, 64, 24, currentMode === "keyboard" ? 0x00aa44 : 0x333344, 0.9);
+    kbBg.setStrokeStyle(1, currentMode === "keyboard" ? 0x00ff66 : 0x666688);
+    kbBg.setInteractive({ useHandCursor: true });
+    this.settingsDynamicObjects.push(kbBg);
+
+    const kbLabel = this.add.text(kbBtnX, curY, "KB", {
+      fontSize: "11px",
+      fontFamily: "monospace",
+      color: "#ffffff",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.settingsDynamicObjects.push(kbLabel);
+
+    const mbBg = this.add.rectangle(mbBtnX, curY, 64, 24, currentMode === "mobile" ? 0x00aa44 : 0x333344, 0.9);
+    mbBg.setStrokeStyle(1, currentMode === "mobile" ? 0x00ff66 : 0x666688);
+    mbBg.setInteractive({ useHandCursor: true });
+    this.settingsDynamicObjects.push(mbBg);
+
+    const mbLabel = this.add.text(mbBtnX, curY, "Mobile", {
+      fontSize: "11px",
+      fontFamily: "monospace",
+      color: "#ffffff",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.settingsDynamicObjects.push(mbLabel);
+
+    kbBg.on("pointerdown", () => {
+      setInputMode("keyboard");
+      this.refreshSettingsModal();
+      this.refreshControlsBox();
+    });
+    mbBg.on("pointerdown", () => {
+      setInputMode("mobile");
+      this.refreshSettingsModal();
+      this.refreshControlsBox();
+    });
+
+    curY += 30;
+
     const divider = this.add.rectangle(modalX, curY, modalW - 40, 1, 0x444466, 0.5);
     this.settingsDynamicObjects.push(divider);
 
@@ -759,64 +879,108 @@ export class TitleScene extends Phaser.Scene {
 
     curY += 20;
 
-    const settingsBindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
-    const bindings = getBindings(settingsBindingsMode);
-    const actionLabels: Record<keyof ControlBindings, string> = {
-      left: "Move Left",
-      right: "Move Right",
-      jump: "Jump",
-      duck: "Duck",
-    };
+    const isMobileMode = getInputMode() === "mobile";
 
-    if (this.gameMode === "multiplayer") {
-      const p1Header = this.add.text(modalX, curY, "PLAYER 1 (Letter Keys)", {
-        fontSize: "12px",
+    if (isMobileMode) {
+      const flipLabel = this.add.text(modalX - 60, curY, "Flip Controls", {
+        fontSize: "14px",
         fontFamily: "monospace",
-        color: "#ffcc00",
+        color: "#cccccc",
+      }).setOrigin(0, 0.5);
+      this.settingsDynamicObjects.push(flipLabel);
+
+      const flipped = getControlsFlipped();
+      const flipBtnW = 50;
+      const flipBtnX = modalX + 60;
+      const flipBg = this.add.rectangle(flipBtnX, curY, flipBtnW, 26, flipped ? 0x44bb44 : 0x0f3460, 0.9);
+      flipBg.setStrokeStyle(1, flipped ? 0x66dd66 : 0x4488ff);
+      flipBg.setInteractive({ useHandCursor: true });
+      this.settingsDynamicObjects.push(flipBg);
+
+      const flipText = this.add.text(flipBtnX, curY, flipped ? "ON" : "OFF", {
+        fontSize: "13px",
+        fontFamily: "monospace",
+        color: "#ffffff",
         fontStyle: "bold",
       }).setOrigin(0.5);
-      this.settingsDynamicObjects.push(p1Header);
+      this.settingsDynamicObjects.push(flipText);
 
-      curY += 22;
-      const p1Actions: (keyof ControlBindings)[] = ["jump", "duck"];
-      p1Actions.forEach((action, i) => {
-        const rowY = curY + i * 32;
-        this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
+      flipBg.on("pointerdown", () => {
+        setControlsFlipped(!flipped);
+        this.refreshSettingsModal();
+        this.refreshControlsBox();
       });
 
-      curY += p1Actions.length * 32 + 12;
-      const p2Header = this.add.text(modalX, curY, "PLAYER 2 (Arrow/Nav Keys)", {
-        fontSize: "12px",
+      curY += 30;
+
+      const layoutDesc = this.add.text(modalX, curY, flipped
+        ? "Left: Jump / Duck    Right: Move"
+        : "Left: Move    Right: Jump / Duck", {
+        fontSize: "11px",
         fontFamily: "monospace",
-        color: "#00ccff",
-        fontStyle: "bold",
+        color: "#888899",
       }).setOrigin(0.5);
-      this.settingsDynamicObjects.push(p2Header);
-
-      curY += 22;
-      const p2Actions: (keyof ControlBindings)[] = ["left", "right"];
-      p2Actions.forEach((action, i) => {
-        const rowY = curY + i * 32;
-        this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
-      });
+      this.settingsDynamicObjects.push(layoutDesc);
     } else {
-      const actions: (keyof ControlBindings)[] = ["left", "right", "jump", "duck"];
-      actions.forEach((action, i) => {
-        const rowY = curY + i * 34;
-        this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
+      const settingsBindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
+      const bindings = getBindings(settingsBindingsMode);
+      const actionLabels: Record<keyof ControlBindings, string> = {
+        left: "Move Left",
+        right: "Move Right",
+        jump: "Jump",
+        duck: "Duck",
+      };
+
+      if (this.gameMode === "multiplayer") {
+        const p1Header = this.add.text(modalX, curY, "PLAYER 1 (Letter Keys)", {
+          fontSize: "12px",
+          fontFamily: "monospace",
+          color: "#ffcc00",
+          fontStyle: "bold",
+        }).setOrigin(0.5);
+        this.settingsDynamicObjects.push(p1Header);
+
+        curY += 22;
+        const p1Actions: (keyof ControlBindings)[] = ["jump", "duck"];
+        p1Actions.forEach((action, i) => {
+          const rowY = curY + i * 32;
+          this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
+        });
+
+        curY += p1Actions.length * 32 + 12;
+        const p2Header = this.add.text(modalX, curY, "PLAYER 2 (Arrow/Nav Keys)", {
+          fontSize: "12px",
+          fontFamily: "monospace",
+          color: "#00ccff",
+          fontStyle: "bold",
+        }).setOrigin(0.5);
+        this.settingsDynamicObjects.push(p2Header);
+
+        curY += 22;
+        const p2Actions: (keyof ControlBindings)[] = ["left", "right"];
+        p2Actions.forEach((action, i) => {
+          const rowY = curY + i * 32;
+          this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
+        });
+      } else {
+        const actions: (keyof ControlBindings)[] = ["left", "right", "jump", "duck"];
+        actions.forEach((action, i) => {
+          const rowY = curY + i * 34;
+          this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
+        });
+      }
+
+      const resetBtn = this.createButton(
+        modalX, modalY + modalH / 2 - 28, 180, 28,
+        "Reset Controls", "#ffcc00", getBgColor().uiColor, 0x0f3460
+      );
+      resetBtn.forEach(obj => this.settingsDynamicObjects.push(obj));
+      (resetBtn[0] as Phaser.GameObjects.Rectangle).on("pointerdown", () => {
+        resetBindings(this.gameMode === "online" ? "single" : this.gameMode);
+        this.refreshSettingsModal();
+        this.refreshControlsBox();
       });
     }
-
-    const resetBtn = this.createButton(
-      modalX, modalY + modalH / 2 - 28, 180, 28,
-      "Reset Controls", "#ffcc00", getBgColor().uiColor, 0x0f3460
-    );
-    resetBtn.forEach(obj => this.settingsDynamicObjects.push(obj));
-    (resetBtn[0] as Phaser.GameObjects.Rectangle).on("pointerdown", () => {
-      resetBindings(this.gameMode === "online" ? "single" : this.gameMode);
-      this.refreshSettingsModal();
-      this.refreshControlsBox();
-    });
   }
 
   private renderBindingRow(

@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { WORLDS } from "../worlds/WorldConfig";
 import type { GameMode } from "./ModeSelectScene";
 import { onlineManager } from "../OnlineMultiplayerManager";
+import { getInputMode } from "../GameSettings";
 
 interface HazardEntry {
   name: string;
@@ -364,10 +365,11 @@ export class WarningScene extends Phaser.Scene {
 
     const isOnlineGuest = data.gameMode === "online" && onlineManager.role === "guest";
     const isOnlineHost = data.gameMode === "online" && onlineManager.role === "host";
+    const isMobile = getInputMode() === "mobile";
 
     const promptText = isOnlineGuest
       ? "Waiting for host to start..."
-      : "Press ENTER to continue";
+      : isMobile ? "Tap to continue" : "Press ENTER to continue";
 
     const prompt = this.add.text(width / 2, height * 0.85, promptText, {
       fontSize: "18px",
@@ -398,12 +400,27 @@ export class WarningScene extends Phaser.Scene {
         this.scene.start("ModeSelectScene");
       });
     } else {
-      this.input.keyboard!.once("keydown-ENTER", () => {
+      let started = false;
+      const startGame = () => {
+        if (started) return;
+        started = true;
         if (isOnlineHost) {
           onlineManager.sendStartLevel();
         }
         this.scene.start("GameScene", data);
-      });
+      };
+
+      this.input.keyboard!.once("keydown-ENTER", startGame);
+
+      const continueBtn = this.add.rectangle(width / 2, height * 0.85, 240, 44, 0x16213e, 0.9);
+      continueBtn.setStrokeStyle(2, 0x0f3460);
+      continueBtn.setInteractive({ useHandCursor: true });
+
+      prompt.setDepth(1);
+
+      continueBtn.on("pointerover", () => continueBtn.setFillStyle(0x1e2d4a, 1));
+      continueBtn.on("pointerout", () => continueBtn.setFillStyle(0x16213e, 0.9));
+      continueBtn.on("pointerdown", startGame);
     }
   }
 }

@@ -9,7 +9,8 @@ import { getCoins, addCoins } from "../CoinManager";
 import type { GameMode } from "./ModeSelectScene";
 import { getBindings } from "../KeyBindings";
 import { onlineManager, type RemoteInputs } from "../OnlineMultiplayerManager";
-import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS } from "../GameSettings";
+import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS, getInputMode } from "../GameSettings";
+import { TouchControls } from "../TouchControls";
 import { toggleMusic } from "../MusicManager";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
 import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
@@ -85,6 +86,7 @@ export class GameScene extends Phaser.Scene {
   private onlineJumpLatch: boolean = false;
   private disconnectOverlay: Phaser.GameObjects.Container | null = null;
   private onlineRoleText: Phaser.GameObjects.Text | null = null;
+  private touchControls: TouchControls | null = null;
 
   constructor() {
     super({ key: "GameScene" });
@@ -256,9 +258,33 @@ export class GameScene extends Phaser.Scene {
     this.pauseKey1.on("down", handlePause);
     this.pauseKey2.on("down", handlePause);
 
+    if (this.touchControls) {
+      this.touchControls.destroy();
+      this.touchControls = null;
+    }
+    if (getInputMode() === "mobile" && this.gameMode !== "online") {
+      this.touchControls = new TouchControls(this);
+      this.touchControls.show();
+    }
+
+    const handleResize = () => {
+      if (this.touchControls) {
+        this.touchControls.reposition();
+        if (!this.isPaused && !this.isDead) {
+          this.touchControls.show();
+        }
+      }
+    };
+    this.scale.on("resize", handleResize);
+
     this.events.on("shutdown", () => {
+      this.scale.off("resize", handleResize);
       this.pauseKey1.off("down", handlePause);
       this.pauseKey2.off("down", handlePause);
+      if (this.touchControls) {
+        this.touchControls.destroy();
+        this.touchControls = null;
+      }
       if (this.gameMode === "online") {
         onlineManager.removeAllListeners();
       }
@@ -849,11 +875,26 @@ export class GameScene extends Phaser.Scene {
 
   private getEffectiveInputs(): { leftDown: boolean; rightDown: boolean; jumpJustDown: boolean; duckDown: boolean } {
     if (this.gameMode !== "online") {
+      const kbLeft = this.cursors.left.isDown;
+      const kbRight = this.cursors.right.isDown;
+      const kbJump = Phaser.Input.Keyboard.JustDown(this.cursors.jump);
+      const kbDuck = this.cursors.duck.isDown;
+
+      if (this.touchControls) {
+        const touch = this.touchControls.getState();
+        return {
+          leftDown: kbLeft || touch.leftDown,
+          rightDown: kbRight || touch.rightDown,
+          jumpJustDown: kbJump || touch.jumpJustDown,
+          duckDown: kbDuck || touch.duckDown,
+        };
+      }
+
       return {
-        leftDown: this.cursors.left.isDown,
-        rightDown: this.cursors.right.isDown,
-        jumpJustDown: Phaser.Input.Keyboard.JustDown(this.cursors.jump),
-        duckDown: this.cursors.duck.isDown,
+        leftDown: kbLeft,
+        rightDown: kbRight,
+        jumpJustDown: kbJump,
+        duckDown: kbDuck,
       };
     }
 
@@ -900,6 +941,9 @@ export class GameScene extends Phaser.Scene {
   private showDisconnectOverlay() {
     if (this.disconnectOverlay) return;
     this.isPaused = true;
+    if (this.touchControls) {
+      this.touchControls.hide();
+    }
     this.physics.world.pause();
     this.tweens.pauseAll();
 
@@ -946,6 +990,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    if (this.touchControls) {
+      this.touchControls.update();
+    }
     if (this.isPaused) return;
     if (this.isDead) return;
 
@@ -1666,6 +1713,10 @@ export class GameScene extends Phaser.Scene {
     this.deaths++;
     recordDeath();
 
+    if (this.touchControls) {
+      this.touchControls.hide();
+    }
+
     if (!fromRemote && this.gameMode === "online") {
       onlineManager.sendDeath();
     }
@@ -1699,12 +1750,19 @@ export class GameScene extends Phaser.Scene {
         this.player.setSize(28, PHYSICS.NORMAL_HEIGHT);
         this.player.body.setSize(28, PHYSICS.NORMAL_HEIGHT);
       }
+      if (this.touchControls) {
+        this.touchControls.show();
+      }
     });
   }
 
   private completeWorld() {
     if (this.isCompletingWorld) return;
     this.isCompletingWorld = true;
+
+    if (this.touchControls) {
+      this.touchControls.hide();
+    }
 
     markWorldCompleted(this.worldIndex, this.deaths);
     recordLevelCompletion();
@@ -1769,6 +1827,9 @@ export class GameScene extends Phaser.Scene {
     this.isPaused = true;
     if (!fromRemote && this.gameMode === "online") {
       onlineManager.sendPause();
+    }
+    if (this.touchControls) {
+      this.touchControls.hide();
     }
     this.physics.world.pause();
     this.tweens.pauseAll();
@@ -1904,6 +1965,9 @@ export class GameScene extends Phaser.Scene {
     if (this.pauseContainer) {
       this.pauseContainer.destroy();
       this.pauseContainer = null;
+    }
+    if (this.touchControls) {
+      this.touchControls.show();
     }
   }
 

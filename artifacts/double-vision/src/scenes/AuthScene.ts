@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { getBgColor } from "../GameSettings";
+import { getBgColor, setInputMode, type InputMode } from "../GameSettings";
 import { loginRequest, registerRequest, isLoggedIn, loadUserData } from "../AuthManager";
 import { loadServerData as loadServerCoins } from "../CoinManager";
 import { loadServerData as loadServerProgress } from "../ProgressManager";
@@ -15,6 +15,7 @@ export class AuthScene extends Phaser.Scene {
   private formContainer: HTMLDivElement | null = null;
   private errorText: Phaser.GameObjects.Text | null = null;
   private uiObjects: Phaser.GameObjects.GameObject[] = [];
+  private selectedInputMode: InputMode = "keyboard";
 
   constructor() {
     super({ key: "AuthScene" });
@@ -135,10 +136,11 @@ export class AuthScene extends Phaser.Scene {
     const scaleX = canvasRect.width / 800;
     const scaleY = canvasRect.height / 480;
 
+    const formTopRatio = mode === "register" ? 0.25 : 0.3;
     const container = document.createElement("div");
     container.style.position = "absolute";
     container.style.left = `${canvasRect.left + (width / 2 - 130) * scaleX}px`;
-    container.style.top = `${canvasRect.top + (height * 0.3) * scaleY}px`;
+    container.style.top = `${canvasRect.top + (height * formTopRatio) * scaleY}px`;
     container.style.width = `${260 * scaleX}px`;
     container.style.zIndex = "1000";
     container.style.display = "flex";
@@ -190,12 +192,61 @@ export class AuthScene extends Phaser.Scene {
       if (e.key === "Enter") this.submitForm();
     });
 
+    if (mode === "register") {
+      const inputModeLabel = document.createElement("label");
+      inputModeLabel.textContent = "Input Mode";
+      inputModeLabel.style.color = "#aaaacc";
+      inputModeLabel.style.fontFamily = "monospace";
+      inputModeLabel.style.fontSize = `${12 * scaleY}px`;
+      inputModeLabel.style.marginTop = `${4 * scaleY}px`;
+      container.appendChild(inputModeLabel);
+
+      const btnRow = document.createElement("div");
+      btnRow.style.display = "flex";
+      btnRow.style.gap = `${8 * scaleX}px`;
+      container.appendChild(btnRow);
+
+      this.selectedInputMode = "keyboard";
+
+      const makeModeBtn = (label: string, value: InputMode) => {
+        const btn = document.createElement("button");
+        btn.textContent = label;
+        btn.style.cssText = `
+          flex: 1;
+          padding: ${8 * scaleY}px;
+          font-family: monospace;
+          font-size: ${13 * scaleY}px;
+          font-weight: bold;
+          border: 2px solid ${value === "keyboard" ? "#00ff66" : "#0f3460"};
+          border-radius: 4px;
+          cursor: pointer;
+          background: ${value === "keyboard" ? "#00aa44" : "#16213e"};
+          color: #ffffff;
+          box-sizing: border-box;
+        `;
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          this.selectedInputMode = value;
+          btnRow.querySelectorAll("button").forEach((b) => {
+            b.style.background = "#16213e";
+            b.style.borderColor = "#0f3460";
+          });
+          btn.style.background = "#00aa44";
+          btn.style.borderColor = "#00ff66";
+        });
+        return btn;
+      };
+
+      btnRow.appendChild(makeModeBtn("⌨️ Keyboard", "keyboard"));
+      btnRow.appendChild(makeModeBtn("📱 Mobile", "mobile"));
+    }
+
     document.body.appendChild(container);
     this.formContainer = container;
 
     setTimeout(() => this.usernameInput?.focus(), 100);
 
-    const submitBtnY = height * 0.62;
+    const submitBtnY = mode === "register" ? height * 0.72 : height * 0.62;
     const submitBg = this.add.rectangle(width / 2, submitBtnY, 200, 44, 0x16213e, 0.9);
     submitBg.setStrokeStyle(2, 0xe94560);
     submitBg.setInteractive({ useHandCursor: true });
@@ -219,7 +270,8 @@ export class AuthScene extends Phaser.Scene {
     });
     submitBg.on("pointerdown", () => this.submitForm());
 
-    const backBtn = this.add.text(width / 2, height * 0.78, "< Back", {
+    const backBtnY = mode === "register" ? height * 0.85 : height * 0.78;
+    const backBtn = this.add.text(width / 2, backBtnY, "< Back", {
       fontSize: "14px",
       fontFamily: "monospace",
       color: "#666688",
@@ -247,6 +299,9 @@ export class AuthScene extends Phaser.Scene {
       : await registerRequest(usr, pwd);
 
     if (result.success) {
+      if (this.mode === "register") {
+        setInputMode(this.selectedInputMode);
+      }
       this.handleLoginSuccess();
     } else {
       this.showError(result.error || "Something went wrong");
@@ -266,18 +321,19 @@ export class AuthScene extends Phaser.Scene {
         }
       }
     } catch {}
-    this.scene.start("ModeSelectScene");
+    this.scene.start("InputModeSelectScene");
   }
 
   private playAsGuest() {
     this.cleanupHTML();
-    this.scene.start("ModeSelectScene");
+    this.scene.start("InputModeSelectScene");
   }
 
   private showError(message: string) {
     if (this.errorText) this.errorText.destroy();
     const { width, height } = this.scale;
-    this.errorText = this.add.text(width / 2, height * 0.72, message, {
+    const errorY = this.mode === "register" ? height * 0.80 : height * 0.72;
+    this.errorText = this.add.text(width / 2, errorY, message, {
       fontSize: "13px",
       fontFamily: "monospace",
       color: "#ff4444",

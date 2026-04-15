@@ -17,15 +17,23 @@ export const BG_PRESETS: BackgroundColorPreset[] = [
   { name: "Dark Red", value: "#2e1a1a", hex: 0x2e1a1a, uiColor: 0x3e1616, uiHover: 0x4a1e1e },
 ];
 
+export type InputMode = "keyboard" | "mobile";
+
 export interface Settings {
   musicEnabled: boolean;
   bgColorIndex: number;
+  inputMode: InputMode;
+  inputModeChosen: boolean;
+  controlsFlipped: boolean;
 }
 
 function defaultSettings(): Settings {
   return {
     musicEnabled: true,
     bgColorIndex: 0,
+    inputMode: "keyboard",
+    inputModeChosen: false,
+    controlsFlipped: false,
   };
 }
 
@@ -35,12 +43,21 @@ function loadFromStorage(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultSettings();
-    const parsed = JSON.parse(raw) as Settings;
+    const parsed = JSON.parse(raw) as Partial<Settings>;
     if (typeof parsed.musicEnabled !== "boolean") return defaultSettings();
     if (typeof parsed.bgColorIndex !== "number" || parsed.bgColorIndex < 0 || parsed.bgColorIndex >= BG_PRESETS.length) {
       parsed.bgColorIndex = 0;
     }
-    return parsed;
+    if (parsed.inputMode !== "keyboard" && parsed.inputMode !== "mobile") {
+      parsed.inputMode = "keyboard";
+    }
+    if (typeof parsed.inputModeChosen !== "boolean") {
+      parsed.inputModeChosen = false;
+    }
+    if (typeof parsed.controlsFlipped !== "boolean") {
+      parsed.controlsFlipped = false;
+    }
+    return parsed as Settings;
   } catch {
     return defaultSettings();
   }
@@ -74,4 +91,27 @@ export function getBgColor(): BackgroundColorPreset {
 
 export function isMusicEnabled(): boolean {
   return currentSettings.musicEnabled;
+}
+
+export function getInputMode(): InputMode {
+  return currentSettings.inputMode;
+}
+
+export function setInputMode(mode: InputMode): void {
+  currentSettings.inputMode = mode;
+  currentSettings.inputModeChosen = true;
+  saveToStorage();
+}
+
+export function hasInputModeBeenChosen(): boolean {
+  return currentSettings.inputModeChosen;
+}
+
+export function getControlsFlipped(): boolean {
+  return currentSettings.controlsFlipped;
+}
+
+export function setControlsFlipped(flipped: boolean): void {
+  currentSettings.controlsFlipped = flipped;
+  saveToStorage();
 }
