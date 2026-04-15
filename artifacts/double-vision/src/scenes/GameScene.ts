@@ -7,6 +7,7 @@ import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type
 import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
 import type { ParallaxLayer } from "../worlds/JungleBackground";
 import { createBeachBackground, updateBeachParallax, type BeachParallaxLayer } from "../worlds/BeachBackground";
+import { createWarZoneBackground, updateWarZoneBackground, destroyWarZoneBackground, type WarZoneBackgroundState } from "../worlds/WarZoneBackground";
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -64,6 +65,7 @@ export class GameScene extends Phaser.Scene {
   private lavaBackground: LavaBackgroundState | null = null;
   private jungleLayers: ParallaxLayer[] = [];
   private beachLayers: BeachParallaxLayer[] = [];
+  private warZoneBackground: WarZoneBackgroundState | null = null;
 
   constructor() {
     super({ key: "GameScene" });
@@ -111,6 +113,11 @@ export class GameScene extends Phaser.Scene {
       destroyLavaBackground(this.lavaBackground, this);
       this.lavaBackground = null;
     }
+    if (this.warZoneBackground) {
+      destroyWarZoneBackground(this.warZoneBackground, this);
+      this.warZoneBackground = null;
+    }
+    this.beachLayers = [];
 
     const world = WORLDS[this.worldIndex];
 
@@ -180,6 +187,10 @@ export class GameScene extends Phaser.Scene {
         destroyLavaBackground(this.lavaBackground, this);
         this.lavaBackground = null;
       }
+      if (this.warZoneBackground) {
+        destroyWarZoneBackground(this.warZoneBackground, this);
+        this.warZoneBackground = null;
+      }
     });
 
     this.worldText = this.add.text(16, 16, world.name, {
@@ -226,6 +237,10 @@ export class GameScene extends Phaser.Scene {
       this.jungleLayers = createJungleBackground(this);
     } else {
       this.jungleLayers = [];
+    }
+
+    if (this.worldIndex === 3) {
+      this.warZoneBackground = createWarZoneBackground(this);
     }
   }
 
@@ -698,6 +713,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.beachLayers.length > 0) {
       updateBeachParallax(this.beachLayers, this.cameras.main);
+    }
+    if (this.warZoneBackground) {
+      updateWarZoneBackground(this.warZoneBackground, delta);
     }
 
     if (this.vineGrabCooldown > 0) this.vineGrabCooldown -= delta;
