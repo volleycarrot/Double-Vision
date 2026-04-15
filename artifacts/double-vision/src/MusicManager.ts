@@ -1,28 +1,35 @@
 import { isMusicEnabled } from "./GameSettings";
+import { MusicTrack } from "./tracks/TrackInterface";
+import { DefaultTrack } from "./tracks/DefaultTrack";
+import { LavaTrack } from "./tracks/LavaTrack";
 
 let audioCtx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let isPlaying = false;
 let currentTimeout: number | null = null;
 let isInitialized = false;
+let currentWorldIndex = -1;
+let activeTrack: MusicTrack | null = null;
+let playbackToken = 0;
 
-const NOTES: Record<string, number> = {
-  C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00, A3: 220.00, B3: 246.94,
-  C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
-  C5: 523.25, D5: 587.33, E5: 659.25,
-};
+const trackCache: Map<number, MusicTrack> = new Map();
 
-const MELODY = [
-  "E4", "G4", "A4", "G4", "E4", "D4", "C4", "D4",
-  "E4", "E4", "G4", "A4", "B4", "A4", "G4", "E4",
-  "C4", "D4", "E4", "D4", "C4", "A3", "C4", "D4",
-  "E4", "G4", "E4", "D4", "C4", "D4", "E4", "C4",
-];
+function getTrackForWorld(worldIndex: number): MusicTrack {
+  const key = worldIndex < 0 ? -1 : worldIndex;
+  let track = trackCache.get(key);
+  if (track) return track;
 
-const BASS = [
-  "C3", "C3", "G3", "G3", "A3", "A3", "E3", "E3",
-  "F3", "F3", "C3", "C3", "G3", "G3", "C3", "C3",
-];
+  switch (key) {
+    case 2:
+      track = new LavaTrack();
+      break;
+    default:
+      track = new DefaultTrack();
+      break;
+  }
+  trackCache.set(key, track);
+  return track;
+}
 
 function getOrCreateContext(): AudioContext | null {
   if (audioCtx && audioCtx.state !== "closed") return audioCtx;
@@ -37,60 +44,55 @@ function getOrCreateContext(): AudioContext | null {
   }
 }
 
-function playNote(ctx: AudioContext, freq: number, startTime: number, duration: number, type: OscillatorType, volume: number) {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(volume, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration * 0.9);
-  osc.connect(gain);
-  gain.connect(masterGain!);
-  osc.start(startTime);
-  osc.stop(startTime + duration);
-}
-
 function scheduleLoop() {
   if (!isPlaying || !audioCtx || audioCtx.state === "closed") return;
   if (!isMusicEnabled()) {
     isPlaying = false;
     return;
   }
+  if (!activeTrack || !masterGain) return;
 
   const ctx = audioCtx;
   const now = ctx.currentTime + 0.1;
-  const noteDuration = 0.3;
-  const loopLength = MELODY.length * noteDuration;
+  const token = playbackToken;
 
-  for (let i = 0; i < MELODY.length; i++) {
-    const note = MELODY[i];
-    const freq = NOTES[note];
-    if (freq) playNote(ctx, freq, now + i * noteDuration, noteDuration * 0.8, "triangle", 0.3);
-  }
+  const sectionDuration = activeTrack.schedule(ctx, masterGain, now);
 
-  for (let i = 0; i < BASS.length; i++) {
-    const note = BASS[i];
-    const freq = NOTES[note];
-    if (freq) playNote(ctx, freq, now + i * noteDuration * 2, noteDuration * 1.8, "sine", 0.2);
-  }
+  if (sectionDuration <= 0) return;
 
   currentTimeout = window.setTimeout(() => {
+    if (playbackToken !== token) return;
     scheduleLoop();
-  }, loopLength * 1000 - 200);
+  }, sectionDuration * 1000 - 300);
 }
 
-export function startMusic(): void {
-  if (isPlaying) return;
-  if (!isMusicEnabled()) return;
+export function startMusic(worldIndex?: number): void {
+  const wi = worldIndex ?? currentWorldIndex;
+
+  if (isPlaying && wi === currentWorldIndex) return;
+  if (!isMusicEnabled()) {
+    currentWorldIndex = wi;
+    return;
+  }
+
+  if (isPlaying && wi !== currentWorldIndex) {
+    stopMusic();
+  }
+
+  currentWorldIndex = wi;
+  activeTrack = getTrackForWorld(wi);
 
   const ctx = getOrCreateContext();
   if (!ctx) return;
 
+  const token = ++playbackToken;
+
   if (ctx.state === "suspended") {
     ctx.resume().then(() => {
+      if (playbackToken !== token) return;
       isPlaying = true;
       scheduleLoop();
-    });
+    }).catch(() => {});
   } else {
     isPlaying = true;
     scheduleLoop();
@@ -100,6 +102,7 @@ export function startMusic(): void {
 
 export function stopMusic(): void {
   isPlaying = false;
+  playbackToken++;
   if (currentTimeout !== null) {
     clearTimeout(currentTimeout);
     currentTimeout = null;
@@ -110,6 +113,19 @@ export function stopMusic(): void {
     } catch {}
     audioCtx = null;
     masterGain = null;
+  }
+}
+
+export function setWorldIndex(worldIndex: number): void {
+  if (worldIndex === currentWorldIndex) return;
+  const wasPlaying = isPlaying;
+  if (wasPlaying) {
+    stopMusic();
+  }
+  currentWorldIndex = worldIndex;
+  activeTrack = getTrackForWorld(worldIndex);
+  if (wasPlaying) {
+    startMusic(worldIndex);
   }
 }
 

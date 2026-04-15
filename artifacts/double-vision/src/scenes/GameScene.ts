@@ -11,7 +11,7 @@ import { getBindings } from "../KeyBindings";
 import { onlineManager, type RemoteInputs } from "../OnlineMultiplayerManager";
 import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS, getInputMode } from "../GameSettings";
 import { TouchControls } from "../TouchControls";
-import { toggleMusic } from "../MusicManager";
+import { toggleMusic, setWorldIndex, startMusic } from "../MusicManager";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
 import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
 import type { ParallaxLayer } from "../worlds/JungleBackground";
@@ -108,6 +108,9 @@ export class GameScene extends Phaser.Scene {
     this.gameMode = data.gameMode || "multiplayer";
     this.levelSeed = data.levelSeed;
     this.isDead = false;
+
+    setWorldIndex(this.worldIndex);
+    startMusic(this.worldIndex);
     this.isCompletingWorld = false;
     this.isDucking = false;
     this.isPaused = false;
