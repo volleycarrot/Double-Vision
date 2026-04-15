@@ -3,6 +3,7 @@ import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } fr
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
+import type { GameMode } from "./ModeSelectScene";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
 import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
 import type { ParallaxLayer } from "../worlds/JungleBackground";
@@ -27,6 +28,7 @@ export class GameScene extends Phaser.Scene {
   private worldIndex: number = 0;
   private deaths: number = 0;
   private startTime: number = 0;
+  private gameMode: GameMode = "multiplayer";
   private lastCheckpointX: number = 0;
   private lastCheckpointY: number = 0;
   private previousPlayerX: number = 0;
@@ -78,10 +80,11 @@ export class GameScene extends Phaser.Scene {
     this.load.image("sand-platform", `${base}sand-platform.webp`);
   }
 
-  create(data: { worldIndex: number; deaths: number; startTime: number }) {
+  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode }) {
     this.worldIndex = data.worldIndex;
     this.deaths = data.deaths;
     this.startTime = data.startTime;
+    this.gameMode = data.gameMode || "multiplayer";
     this.isDead = false;
     this.isDucking = false;
     this.isPaused = false;
@@ -167,12 +170,21 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, LEVEL_WIDTH * TILE, 15 * TILE);
     this.physics.world.setBounds(0, 0, LEVEL_WIDTH * TILE, 20 * TILE);
 
-    this.cursors = {
-      left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-      right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-      jump: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      duck: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-    };
+    if (this.gameMode === "single") {
+      this.cursors = {
+        left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+        right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+        jump: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
+        duck: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
+      };
+    } else {
+      this.cursors = {
+        left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+        right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+        jump: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+        duck: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      };
+    }
 
     this.pauseKey1 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.pauseKey2 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -1430,7 +1442,7 @@ export class GameScene extends Phaser.Scene {
     if (allWorldsCompleted()) {
       this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime });
     } else {
-      this.scene.start("TitleScene");
+      this.scene.start("TitleScene", { gameMode: this.gameMode });
     }
   }
 
@@ -1515,13 +1527,13 @@ export class GameScene extends Phaser.Scene {
     this.isPaused = false;
     this.physics.world.resume();
     this.tweens.resumeAll();
-    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now() });
+    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now(), gameMode: this.gameMode });
   }
 
   private goHome() {
     this.isPaused = false;
     this.physics.world.resume();
     this.tweens.resumeAll();
-    this.scene.start("TitleScene");
+    this.scene.start("StartScene");
   }
 }

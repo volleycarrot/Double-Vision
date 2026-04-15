@@ -1,12 +1,13 @@
 import Phaser from "phaser";
 import { WORLDS } from "../worlds/WorldConfig";
+import type { GameMode } from "./ModeSelectScene";
 
 export class WarningScene extends Phaser.Scene {
   constructor() {
     super({ key: "WarningScene" });
   }
 
-  create(data: { worldIndex: number; deaths: number; startTime: number }) {
+  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode }) {
     const { width, height } = this.scale;
     const world = WORLDS[data.worldIndex];
 
@@ -22,7 +23,7 @@ export class WarningScene extends Phaser.Scene {
 
     homeBtn.on("pointerover", () => homeBtn.setColor("#ffffff"));
     homeBtn.on("pointerout", () => homeBtn.setColor("#cccccc"));
-    homeBtn.on("pointerdown", () => this.scene.start("TitleScene"));
+    homeBtn.on("pointerdown", () => this.scene.start("StartScene"));
 
     const worldNum = this.add.text(width / 2, height * 0.15, `WORLD ${data.worldIndex + 1}`, {
       fontSize: "20px",

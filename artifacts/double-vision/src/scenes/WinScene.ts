@@ -82,7 +82,7 @@ export class WinScene extends Phaser.Scene {
     });
 
     this.input.keyboard!.once("keydown-ENTER", () => {
-      this.scene.start("TitleScene");
+      this.scene.start("StartScene");
     });
   }
 }

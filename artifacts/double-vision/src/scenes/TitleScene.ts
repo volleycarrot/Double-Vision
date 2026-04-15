@@ -2,13 +2,18 @@ import Phaser from "phaser";
 import { WORLDS } from "../worlds/WorldConfig";
 import { loadProgress } from "../ProgressManager";
 import { COLOR_PRESETS, getSelectedColor, getSelectedColorIndex, setSelectedColorIndex, EYE, getEyeOffsetY } from "../PlayerConfig";
+import type { GameMode } from "./ModeSelectScene";
 
 export class TitleScene extends Phaser.Scene {
+  private gameMode: GameMode = "multiplayer";
+
   constructor() {
     super({ key: "TitleScene" });
   }
 
-  create() {
+  create(data: { gameMode?: GameMode }) {
+    this.gameMode = data?.gameMode || "multiplayer";
+
     const { width, height } = this.scale;
     const progress = loadProgress();
 
@@ -24,7 +29,8 @@ export class TitleScene extends Phaser.Scene {
     });
     title.setOrigin(0.5);
 
-    const subtitle = this.add.text(leftCenterX, height * 0.25, "2-Player Co-op Platformer", {
+    const modeLabel = this.gameMode === "single" ? "Single Player" : "2-Player Co-op Platformer";
+    const subtitle = this.add.text(leftCenterX, height * 0.25, modeLabel, {
       fontSize: "18px",
       fontFamily: "monospace",
       color: "#aaaacc",
@@ -33,41 +39,80 @@ export class TitleScene extends Phaser.Scene {
 
     const controlBoxY = height * 0.48;
     const controlBoxW = 440;
-    const controlBoxH = 120;
-    const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
-    controlBg.setStrokeStyle(2, 0x0f3460);
 
-    this.add.text(leftCenterX, controlBoxY - 40, "CONTROLS", {
-      fontSize: "16px",
-      fontFamily: "monospace",
-      color: "#e94560",
-      fontStyle: "bold",
-    }).setOrigin(0.5);
+    if (this.gameMode === "single") {
+      const controlBoxH = 120;
+      const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
+      controlBg.setStrokeStyle(2, 0x0f3460);
 
-    const textLeftX = leftCenterX - controlBoxW / 2 + 20;
-    const textRightX = leftCenterX - controlBoxW / 2 + 170;
+      this.add.text(leftCenterX, controlBoxY - 40, "CONTROLS", {
+        fontSize: "16px",
+        fontFamily: "monospace",
+        color: "#e94560",
+        fontStyle: "bold",
+      }).setOrigin(0.5);
 
-    this.add.text(textLeftX, controlBoxY - 12, "Player 1:", {
-      fontSize: "14px",
-      fontFamily: "monospace",
-      color: "#ffcc00",
-    });
-    this.add.text(textRightX, controlBoxY - 12, "W = Jump  |  S = Duck", {
-      fontSize: "14px",
-      fontFamily: "monospace",
-      color: "#ffffff",
-    });
+      const textLeftX = leftCenterX - controlBoxW / 2 + 20;
+      const textRightX = leftCenterX - controlBoxW / 2 + 130;
 
-    this.add.text(textLeftX, controlBoxY + 14, "Player 2:", {
-      fontSize: "14px",
-      fontFamily: "monospace",
-      color: "#00ccff",
-    });
-    this.add.text(textRightX, controlBoxY + 14, "\u2190 = Left  |  \u2192 = Right", {
-      fontSize: "14px",
-      fontFamily: "monospace",
-      color: "#ffffff",
-    });
+      this.add.text(textLeftX, controlBoxY - 14, "Move:", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffcc00",
+      });
+      this.add.text(textRightX, controlBoxY - 14, "\u2190 = Left  |  \u2192 = Right", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffffff",
+      });
+
+      this.add.text(textLeftX, controlBoxY + 10, "Actions:", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffcc00",
+      });
+      this.add.text(textRightX, controlBoxY + 10, "\u2191 = Jump  |  \u2193 = Duck", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffffff",
+      });
+    } else {
+      const controlBoxH = 120;
+      const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
+      controlBg.setStrokeStyle(2, 0x0f3460);
+
+      this.add.text(leftCenterX, controlBoxY - 40, "CONTROLS", {
+        fontSize: "16px",
+        fontFamily: "monospace",
+        color: "#e94560",
+        fontStyle: "bold",
+      }).setOrigin(0.5);
+
+      const textLeftX = leftCenterX - controlBoxW / 2 + 20;
+      const textRightX = leftCenterX - controlBoxW / 2 + 170;
+
+      this.add.text(textLeftX, controlBoxY - 12, "Player 1:", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffcc00",
+      });
+      this.add.text(textRightX, controlBoxY - 12, "W = Jump  |  S = Duck", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffffff",
+      });
+
+      this.add.text(textLeftX, controlBoxY + 14, "Player 2:", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#00ccff",
+      });
+      this.add.text(textRightX, controlBoxY + 14, "\u2190 = Left  |  \u2192 = Right", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ffffff",
+      });
+    }
 
     const selectedColor = getSelectedColor();
     const playerSquare = this.add.rectangle(leftCenterX, height * 0.68, 32, 32, selectedColor.fill);
@@ -196,12 +241,31 @@ export class TitleScene extends Phaser.Scene {
         label.setColor(completed ? "#00ff88" : "#cccccc");
       });
       btnBg.on("pointerdown", () => {
-        this.scene.start("WarningScene", { worldIndex: i, deaths: 0, startTime: Date.now() });
+        this.scene.start("WarningScene", { worldIndex: i, deaths: 0, startTime: Date.now(), gameMode: this.gameMode });
       });
     });
 
     this.input.keyboard!.once("keydown-ENTER", () => {
-      this.scene.start("WarningScene", { worldIndex: 0, deaths: 0, startTime: Date.now() });
+      this.scene.start("WarningScene", { worldIndex: 0, deaths: 0, startTime: Date.now(), gameMode: this.gameMode });
+    });
+
+    const escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    escKey.once("down", () => {
+      this.scene.start("ModeSelectScene");
+    });
+
+    const backBtn = this.add.text(16, 16, "< Back", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+      backgroundColor: "#1a1a2e",
+      padding: { x: 8, y: 4 },
+    }).setInteractive({ useHandCursor: true });
+
+    backBtn.on("pointerover", () => backBtn.setColor("#ffffff"));
+    backBtn.on("pointerout", () => backBtn.setColor("#cccccc"));
+    backBtn.on("pointerdown", () => {
+      this.scene.start("ModeSelectScene");
     });
   }
 }
