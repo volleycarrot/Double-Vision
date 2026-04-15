@@ -1251,7 +1251,7 @@ export class GameScene extends Phaser.Scene {
 
       v.platform.setPosition(endX, endY);
 
-      if (!this.grabbedVine && this.vineGrabCooldown <= 0) {
+      if (!this.grabbedVine && this.vineGrabCooldown <= 0 && !this.isDucking) {
         const grabBounds = new Phaser.Geom.Rectangle(endX - TILE / 2, endY - TILE / 2, TILE, TILE);
         if (Phaser.Geom.Rectangle.Overlaps(playerBounds, grabBounds)) {
           this.grabbedVine = v;
