@@ -223,6 +223,7 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.addSettingsButton(leftCenterX, height);
+    this.addShopButton(leftCenterX, height);
 
     this.events.on("shutdown", () => {
       this.removeKeyListener();
@@ -353,6 +354,29 @@ export class TitleScene extends Phaser.Scene {
     });
     gearBg.on("pointerdown", () => {
       if (!this.settingsOpen) this.openSettings();
+    });
+  }
+
+  private addShopButton(leftCenterX: number, height: number) {
+    const shopX = leftCenterX + 200;
+    const shopY = height * 0.48 - 40;
+
+    const shopBg = this.add.rectangle(shopX, shopY, 36, 36, 0x16213e, 0.9);
+    shopBg.setStrokeStyle(2, 0x0f3460);
+    shopBg.setInteractive({ useHandCursor: true });
+
+    const shopIcon = this.add.text(shopX, shopY, "🛒", {
+      fontSize: "20px",
+    }).setOrigin(0.5);
+
+    shopBg.on("pointerover", () => {
+      shopBg.setFillStyle(0x1e2d4a, 1);
+    });
+    shopBg.on("pointerout", () => {
+      shopBg.setFillStyle(0x16213e, 0.9);
+    });
+    shopBg.on("pointerdown", () => {
+      if (!this.settingsOpen) this.scene.start("ShopScene");
     });
   }
 

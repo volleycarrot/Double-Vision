@@ -27,6 +27,9 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - Title screen has a world gallery on the right with completion indicators
 - Pause menu (ESC or P) with Unpause, Restart, Home buttons
 - Progress (completion, best deaths) persisted to localStorage
+- Coins scattered through levels, collected on touch, tracked in localStorage
+- Accessory shop (13 items across 4 categories: hats, glasses, capes, neckwear) - buy with coins, equip/remove
+- Equipped accessories drawn on player character in-game
 - Completing a world returns to title; completing all 4 shows WinScene
 
 ### Controls
@@ -49,8 +52,11 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - `src/KeyBindings.ts` - Key binding configuration module with localStorage persistence
 - `src/GameSettings.ts` - Settings persistence (music, background color)
 - `src/MusicManager.ts` - Procedural music via Web Audio API
+- `src/CoinManager.ts` - Coin balance persistence in localStorage
+- `src/AccessoryManager.ts` - Accessory definitions, ownership, equip state, and drawing logic
 - `src/ProgressManager.ts` - localStorage progress read/write (completion, deaths)
-- `src/scenes/TitleScene.ts` - Title screen with world gallery, controls display, and settings modal
+- `src/scenes/TitleScene.ts` - Title screen with world gallery, controls display, settings modal, and shop button
+- `src/scenes/ShopScene.ts` - Accessory shop with category tabs, buy/equip/remove, character preview
 - `src/scenes/WarningScene.ts` - Pre-world hazard warning
 - `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints, pause menu
 - `src/scenes/WinScene.ts` - Victory screen with stats (shown when all 4 worlds complete)

@@ -3,6 +3,8 @@ import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } fr
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
+import { drawAccessories } from "../AccessoryManager";
+import { getCoins, addCoins } from "../CoinManager";
 import type { GameMode } from "./ModeSelectScene";
 import { getBindings } from "../KeyBindings";
 import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS } from "../GameSettings";
@@ -71,6 +73,11 @@ export class GameScene extends Phaser.Scene {
   private jungleLayers: ParallaxLayer[] = [];
   private beachLayers: BeachParallaxLayer[] = [];
   private warZoneBackground: WarZoneBackgroundState | null = null;
+  private coinGroup!: Phaser.Physics.Arcade.Group;
+  private coinGfxMap: Map<Phaser.GameObjects.Rectangle, Phaser.GameObjects.Graphics> = new Map();
+  private coinsCollected: number = 0;
+  private coinText!: Phaser.GameObjects.Text;
+  private accessoryGfx!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super({ key: "GameScene" });
@@ -115,6 +122,8 @@ export class GameScene extends Phaser.Scene {
     this.bullets = null;
     this.bulletTimer = 0;
     this.bulletVisuals = [];
+    this.coinGfxMap = new Map();
+    this.coinsCollected = 0;
     if (this.lavaBackground) {
       destroyLavaBackground(this.lavaBackground, this);
       this.lavaBackground = null;
@@ -248,6 +257,65 @@ export class GameScene extends Phaser.Scene {
 
     if (this.worldIndex === 3) {
       this.warZoneBackground = createWarZoneBackground(this);
+    }
+
+    this.coinGroup = this.physics.add.group({ allowGravity: false });
+    this.spawnCoins(levelTiles);
+    this.physics.add.overlap(this.player, this.coinGroup, (_p, coin) => {
+      const c = coin as Phaser.GameObjects.Rectangle;
+      const g = this.coinGfxMap.get(c);
+      if (g) g.destroy();
+      this.coinGfxMap.delete(c);
+      c.destroy();
+      this.coinsCollected++;
+      addCoins(1);
+      this.coinText.setText(`Coins: ${getCoins()}`);
+    }, undefined, this);
+
+    this.coinText = this.add.text(this.cameras.main.width / 2, 40, `Coins: ${getCoins()}`, {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#ffdd44",
+    }).setScrollFactor(0).setOrigin(0.5, 0).setDepth(100);
+
+    this.accessoryGfx = this.add.graphics().setDepth(11);
+  }
+
+  private spawnCoins(tiles: LevelTile[]) {
+    const groundCols = new Set<number>();
+    const hazardCols = new Set<number>();
+    tiles.forEach(t => {
+      if (t.type === "ground") groundCols.add(t.x);
+      if (t.type === "kill" || t.type === "spike" || t.type === "movement") hazardCols.add(t.x);
+    });
+
+    const groundLevel = LEVEL_HEIGHT - 3;
+    const coinSize = 12;
+
+    for (let col = 8; col < LEVEL_WIDTH - 5; col += 3 + Math.floor(Math.random() * 4)) {
+      if (!groundCols.has(col) || hazardCols.has(col)) continue;
+      if (Math.random() > 0.5) continue;
+
+      const heightOptions = [groundLevel - 2, groundLevel - 4, groundLevel - 6];
+      const coinY = heightOptions[Math.floor(Math.random() * heightOptions.length)];
+      const px = col * TILE + TILE / 2;
+      const py = coinY * TILE + TILE / 2;
+
+      const hitZone = this.add.rectangle(px, py, coinSize, coinSize, 0x000000, 0);
+      this.physics.add.existing(hitZone, false);
+      (hitZone.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      (hitZone.body as Phaser.Physics.Arcade.Body).setImmovable(true);
+      this.coinGroup.add(hitZone);
+
+      const gfx = this.add.graphics().setDepth(8);
+      gfx.fillStyle(0xffdd00, 1);
+      gfx.fillCircle(px, py, coinSize / 2);
+      gfx.fillStyle(0xffaa00, 1);
+      gfx.fillCircle(px - 1, py - 1, coinSize / 2 - 2);
+      gfx.fillStyle(0xffee66, 1);
+      gfx.fillCircle(px - 2, py - 2, 2);
+
+      this.coinGfxMap.set(hitZone, gfx);
     }
   }
 
@@ -814,6 +882,9 @@ export class GameScene extends Phaser.Scene {
 
     const currentHeight = this.isDucking ? PHYSICS.DUCK_HEIGHT : PHYSICS.NORMAL_HEIGHT;
     drawEyes(this.eyesGfx, this.player.x, this.player.y, currentHeight);
+
+    this.accessoryGfx.clear();
+    drawAccessories(this.accessoryGfx, this.player.x, this.player.y, 28, currentHeight, getSelectedColor().fill);
 
     if (this.player.x > (LEVEL_WIDTH - 3) * TILE) {
       this.completeWorld();
