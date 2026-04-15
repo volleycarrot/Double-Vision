@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { getControlsFlipped } from "./GameSettings";
 
+export type TouchRole = "host" | "guest" | null;
+
 export interface TouchInputState {
   leftDown: boolean;
   rightDown: boolean;
@@ -16,6 +18,7 @@ export class TouchControls {
   private container: Phaser.GameObjects.Container;
   private buttons: { rect: Phaser.GameObjects.Rectangle; action: Action }[] = [];
   private activePointers: Map<number, Action> = new Map();
+  private role: TouchRole;
 
   private _leftDown = false;
   private _rightDown = false;
@@ -24,8 +27,9 @@ export class TouchControls {
   private _duckDown = false;
   private _jumpWasDown = false;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, role: TouchRole = null) {
     this.scene = scene;
+    this.role = role;
     this.container = scene.add.container(0, 0).setDepth(500).setScrollFactor(0);
     this.createButtons();
     this.hide();
@@ -48,29 +52,32 @@ export class TouchControls {
     const rightSideX2 = width - padding - btnSize - gap - btnSize / 2;
     const bottomY = height - padding - btnSize / 2;
 
-    let leftBtn: Phaser.GameObjects.Rectangle;
-    let rightBtn: Phaser.GameObjects.Rectangle;
-    let jumpBtn: Phaser.GameObjects.Rectangle;
-    let duckBtn: Phaser.GameObjects.Rectangle;
+    const showHorizontal = this.role !== "guest";
+    const showVertical = this.role !== "host";
 
     if (flipped) {
-      jumpBtn = this.createButton(leftSideX1, bottomY - btnSize - gap, btnSize, btnSize, "▲", alpha);
-      duckBtn = this.createButton(leftSideX2, bottomY, btnSize, btnSize, "▼", alpha);
-      leftBtn = this.createButton(rightSideX2, bottomY, btnSize, btnSize, "◀", alpha);
-      rightBtn = this.createButton(rightSideX1, bottomY, btnSize, btnSize, "▶", alpha);
+      if (showVertical) {
+        const jumpBtn = this.createButton(leftSideX1, bottomY - btnSize - gap, btnSize, btnSize, "▲", alpha);
+        const duckBtn = this.createButton(leftSideX2, bottomY, btnSize, btnSize, "▼", alpha);
+        this.buttons.push({ rect: jumpBtn, action: "jump" }, { rect: duckBtn, action: "duck" });
+      }
+      if (showHorizontal) {
+        const leftBtn = this.createButton(rightSideX2, bottomY, btnSize, btnSize, "◀", alpha);
+        const rightBtn = this.createButton(rightSideX1, bottomY, btnSize, btnSize, "▶", alpha);
+        this.buttons.push({ rect: leftBtn, action: "left" }, { rect: rightBtn, action: "right" });
+      }
     } else {
-      leftBtn = this.createButton(leftSideX1, bottomY, btnSize, btnSize, "◀", alpha);
-      rightBtn = this.createButton(leftSideX2, bottomY, btnSize, btnSize, "▶", alpha);
-      jumpBtn = this.createButton(rightSideX1, bottomY - btnSize - gap, btnSize, btnSize, "▲", alpha);
-      duckBtn = this.createButton(rightSideX2, bottomY, btnSize, btnSize, "▼", alpha);
+      if (showHorizontal) {
+        const leftBtn = this.createButton(leftSideX1, bottomY, btnSize, btnSize, "◀", alpha);
+        const rightBtn = this.createButton(leftSideX2, bottomY, btnSize, btnSize, "▶", alpha);
+        this.buttons.push({ rect: leftBtn, action: "left" }, { rect: rightBtn, action: "right" });
+      }
+      if (showVertical) {
+        const jumpBtn = this.createButton(rightSideX1, bottomY - btnSize - gap, btnSize, btnSize, "▲", alpha);
+        const duckBtn = this.createButton(rightSideX2, bottomY, btnSize, btnSize, "▼", alpha);
+        this.buttons.push({ rect: jumpBtn, action: "jump" }, { rect: duckBtn, action: "duck" });
+      }
     }
-
-    this.buttons = [
-      { rect: leftBtn, action: "left" },
-      { rect: rightBtn, action: "right" },
-      { rect: jumpBtn, action: "jump" },
-      { rect: duckBtn, action: "duck" },
-    ];
 
     this.buttons.forEach(({ rect, action }) => {
       rect.on("pointerdown", (pointer: Phaser.Input.Pointer) => {

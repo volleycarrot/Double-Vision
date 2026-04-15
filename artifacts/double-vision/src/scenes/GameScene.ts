@@ -262,8 +262,9 @@ export class GameScene extends Phaser.Scene {
       this.touchControls.destroy();
       this.touchControls = null;
     }
-    if (getInputMode() === "mobile" && this.gameMode !== "online") {
-      this.touchControls = new TouchControls(this);
+    if (getInputMode() === "mobile") {
+      const touchRole = this.gameMode === "online" ? (onlineManager.role ?? null) : null;
+      this.touchControls = new TouchControls(this, touchRole);
       this.touchControls.show();
     }
 
@@ -900,11 +901,12 @@ export class GameScene extends Phaser.Scene {
 
     const remote = onlineManager.getRemoteInputs();
     const role = onlineManager.role;
+    const touch = this.touchControls ? this.touchControls.getState() : null;
 
     if (role === "host") {
       return {
-        leftDown: this.cursors.left.isDown,
-        rightDown: this.cursors.right.isDown,
+        leftDown: this.cursors.left.isDown || (touch ? touch.leftDown : false),
+        rightDown: this.cursors.right.isDown || (touch ? touch.rightDown : false),
         jumpJustDown: remote.jump,
         duckDown: remote.duck,
       };
@@ -912,8 +914,8 @@ export class GameScene extends Phaser.Scene {
       return {
         leftDown: remote.left,
         rightDown: remote.right,
-        jumpJustDown: Phaser.Input.Keyboard.JustDown(this.cursors.jump),
-        duckDown: this.cursors.duck.isDown,
+        jumpJustDown: Phaser.Input.Keyboard.JustDown(this.cursors.jump) || (touch ? touch.jumpJustDown : false),
+        duckDown: this.cursors.duck.isDown || (touch ? touch.duckDown : false),
       };
     }
   }
@@ -921,10 +923,11 @@ export class GameScene extends Phaser.Scene {
   private sendOnlineInputs() {
     if (this.gameMode !== "online") return;
     const role = onlineManager.role;
+    const touch = this.touchControls ? this.touchControls.getState() : null;
     if (role === "host") {
       onlineManager.sendInputs({
-        left: this.cursors.left.isDown,
-        right: this.cursors.right.isDown,
+        left: this.cursors.left.isDown || (touch ? touch.leftDown : false),
+        right: this.cursors.right.isDown || (touch ? touch.rightDown : false),
         jump: false,
         duck: false,
       });
@@ -933,7 +936,7 @@ export class GameScene extends Phaser.Scene {
         left: false,
         right: false,
         jump: this.onlineJumpLatch,
-        duck: this.cursors.duck.isDown,
+        duck: this.cursors.duck.isDown || (touch ? touch.duckDown : false),
       });
     }
   }
@@ -1015,8 +1018,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.gameMode === "online") {
-      if (onlineManager.role === "guest" && Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
-        this.onlineJumpLatch = true;
+      if (onlineManager.role === "guest") {
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
+          this.onlineJumpLatch = true;
+        }
+        if (this.touchControls) {
+          const touchState = this.touchControls.getState();
+          if (touchState.jumpJustDown) {
+            this.onlineJumpLatch = true;
+          }
+        }
       }
       this.onlineInputSendTimer += delta;
       if (this.onlineInputSendTimer >= 33) {
