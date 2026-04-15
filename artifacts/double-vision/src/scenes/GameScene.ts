@@ -38,6 +38,7 @@ export class GameScene extends Phaser.Scene {
   private lastCheckpointY: number = 0;
   private previousPlayerX: number = 0;
   private isDead: boolean = false;
+  private isCompletingWorld: boolean = false;
   private isDucking: boolean = false;
   private deathText!: Phaser.GameObjects.Text;
   private worldText!: Phaser.GameObjects.Text;
@@ -96,6 +97,7 @@ export class GameScene extends Phaser.Scene {
     this.startTime = data.startTime;
     this.gameMode = data.gameMode || "multiplayer";
     this.isDead = false;
+    this.isCompletingWorld = false;
     this.isDucking = false;
     this.isPaused = false;
     this.pauseContainer = null;
@@ -1467,7 +1469,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleDeath() {
-    if (this.isDead) return;
+    if (this.isDead || this.isCompletingWorld) return;
     this.isDead = true;
     this.deaths++;
     this.deathText.setText(`Deaths: ${this.deaths}`);
@@ -1504,12 +1506,49 @@ export class GameScene extends Phaser.Scene {
   }
 
   private completeWorld() {
+    if (this.isCompletingWorld) return;
+    this.isCompletingWorld = true;
+
     markWorldCompleted(this.worldIndex, this.deaths);
-    if (allWorldsCompleted()) {
-      this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime });
-    } else {
-      this.scene.start("TitleScene", { gameMode: this.gameMode });
+
+    const coinReward = Math.max(0, 10 - this.deaths);
+    if (coinReward > 0) {
+      addCoins(coinReward);
+      this.coinText.setText(`Coins: ${getCoins()}`);
     }
+
+    this.physics.world.pause();
+
+    const { width, height } = this.cameras.main;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const overlay = this.add.rectangle(cx, cy, width, height, 0x000000, 0.6)
+      .setScrollFactor(0)
+      .setDepth(600);
+
+    const rewardMsg = coinReward > 0
+      ? `Level Complete!\n+${coinReward} bonus coins`
+      : `Level Complete!\nNo bonus coins (${this.deaths} deaths)`;
+
+    const rewardText = this.add.text(cx, cy, rewardMsg, {
+      fontFamily: "monospace",
+      fontSize: "28px",
+      color: coinReward > 0 ? "#ffd700" : "#cccccc",
+      align: "center",
+      stroke: "#000000",
+      strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(601);
+
+    this.time.delayedCall(2000, () => {
+      overlay.destroy();
+      rewardText.destroy();
+      if (allWorldsCompleted()) {
+        this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime });
+      } else {
+        this.scene.start("TitleScene", { gameMode: this.gameMode });
+      }
+    });
   }
 
   private togglePause() {
