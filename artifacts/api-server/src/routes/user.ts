@@ -116,7 +116,6 @@ router.post("/user/accessories", authRequired, async (req, res) => {
     }
 
     const uniqueOwned = [...new Set(owned as string[])];
-    await db.delete(userAccessoriesTable).where(eq(userAccessoriesTable.userId, userId));
 
     if (uniqueOwned.length > 0) {
       const equippedMap: Record<string, boolean> = equipped || {};
@@ -125,7 +124,13 @@ router.post("/user/accessories", authRequired, async (req, res) => {
         accessoryId: accId,
         equipped: !!equippedMap[accId],
       }));
-      await db.insert(userAccessoriesTable).values(values);
+      await db
+        .insert(userAccessoriesTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [userAccessoriesTable.userId, userAccessoriesTable.accessoryId],
+          set: { equipped: sql`excluded.equipped` },
+        });
     }
 
     res.json({ success: true });

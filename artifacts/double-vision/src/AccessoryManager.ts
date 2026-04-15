@@ -105,7 +105,9 @@ function migrateState(s: AccessoryState): AccessoryState {
 }
 
 let state: AccessoryState = migrateState(loadState());
-save();
+try {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+} catch {}
 
 function loadState(): AccessoryState {
   try {
@@ -174,20 +176,29 @@ export function getEquippedAccessories(): Accessory[] {
 }
 
 export function loadServerData(serverAccessories: Array<{ accessoryId: string; equipped: boolean }>): void {
-  const newState = defaultState();
+  const mergedOwned = new Set<string>(state.owned);
+  const mergedEquipped: Record<string, string | null> = { ...state.equipped };
+
   for (const sa of serverAccessories) {
-    newState.owned.push(sa.accessoryId);
+    mergedOwned.add(sa.accessoryId);
     if (sa.equipped) {
       const acc = ACCESSORIES.find(a => a.id === sa.accessoryId);
       if (acc) {
-        newState.equipped[acc.category] = sa.accessoryId;
+        mergedEquipped[acc.category] = sa.accessoryId;
       }
     }
   }
-  state = newState;
+
+  state = {
+    ...state,
+    owned: [...mergedOwned],
+    equipped: mergedEquipped,
+  };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {}
+
+  save();
 }
 
 export function drawSingleAccessory(
