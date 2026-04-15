@@ -34,6 +34,8 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - Coins scattered through levels, collected on touch, tracked in localStorage (+ server for logged-in users)
 - Accessory shop (13 items across 4 categories: hats, glasses, capes, neckwear) - buy with coins, equip/remove
 - Equipped accessories drawn on player character in-game
+- All-time stats tracking (total coins earned/spent, deaths, level completions) persisted to localStorage (+ server for logged-in users)
+- Stats button (📊) on TitleScene opens a modal displaying all-time stats
 - Completing a world returns to title; completing all 4 shows WinScene
 
 ### Game Modes

@@ -8,10 +8,12 @@ import { getBgColor, getSettings, setMusicEnabled, setBgColorIndex, BG_PRESETS }
 import { toggleMusic } from "../MusicManager";
 import { onlineManager } from "../OnlineMultiplayerManager";
 import { isLoggedIn, getUsername, logout } from "../AuthManager";
+import { getStats } from "../StatsManager";
 
 export class TitleScene extends Phaser.Scene {
   private gameMode: GameMode = "multiplayer";
   private settingsOpen = false;
+  private statsOpen = false;
   private settingsOverlay: Phaser.GameObjects.Rectangle | null = null;
   private settingsModalBg: Phaser.GameObjects.Rectangle | null = null;
   private settingsDynamicObjects: Phaser.GameObjects.GameObject[] = [];
@@ -20,6 +22,9 @@ export class TitleScene extends Phaser.Scene {
   private keyListener: ((event: KeyboardEvent) => void) | null = null;
   private errorText: Phaser.GameObjects.Text | null = null;
   private errorTimer: Phaser.Time.TimerEvent | null = null;
+  private statsOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private statsModalBg: Phaser.GameObjects.Rectangle | null = null;
+  private statsDynamicObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super({ key: "TitleScene" });
@@ -28,6 +33,7 @@ export class TitleScene extends Phaser.Scene {
   create(data: { gameMode?: GameMode }) {
     this.gameMode = data?.gameMode || "multiplayer";
     this.settingsOpen = false;
+    this.statsOpen = false;
     this.settingsOverlay = null;
     this.settingsModalBg = null;
     this.settingsDynamicObjects = [];
@@ -36,6 +42,9 @@ export class TitleScene extends Phaser.Scene {
     this.keyListener = null;
     this.errorText = null;
     this.errorTimer = null;
+    this.statsOverlay = null;
+    this.statsModalBg = null;
+    this.statsDynamicObjects = [];
 
     const { width, height } = this.scale;
     const progress = loadProgress();
@@ -257,6 +266,10 @@ export class TitleScene extends Phaser.Scene {
 
     const escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     escKey.on("down", () => {
+      if (this.statsOpen) {
+        this.closeStats();
+        return;
+      }
       if (this.settingsOpen) {
         this.closeSettings();
         return;
@@ -281,6 +294,7 @@ export class TitleScene extends Phaser.Scene {
 
     this.addSettingsButton(leftCenterX, height);
     this.addShopButton(leftCenterX, height);
+    this.addStatsButton(leftCenterX, height);
 
     const playerName = getUsername();
     const nameLabel = this.add.text(16, height - 30, isLoggedIn() ? `Player: ${playerName}` : "Playing as Guest", {
@@ -510,6 +524,111 @@ export class TitleScene extends Phaser.Scene {
     shopBg.on("pointerdown", () => {
       if (!this.settingsOpen) this.scene.start("ShopScene");
     });
+  }
+
+  private addStatsButton(leftCenterX: number, height: number) {
+    const statsX = leftCenterX + 160;
+    const statsY = height * 0.48 - 40;
+
+    const statsBg = this.add.rectangle(statsX, statsY, 36, 36, 0x16213e, 0.9);
+    statsBg.setStrokeStyle(2, 0x0f3460);
+    statsBg.setInteractive({ useHandCursor: true });
+
+    const statsIcon = this.add.text(statsX, statsY, "\u{1F4CA}", {
+      fontSize: "20px",
+    }).setOrigin(0.5);
+
+    statsBg.on("pointerover", () => {
+      statsBg.setFillStyle(0x1e2d4a, 1);
+    });
+    statsBg.on("pointerout", () => {
+      statsBg.setFillStyle(0x16213e, 0.9);
+    });
+    statsBg.on("pointerdown", () => {
+      if (!this.settingsOpen && !this.statsOpen) this.openStats();
+    });
+  }
+
+  private openStats() {
+    this.statsOpen = true;
+    const { width, height } = this.scale;
+    const modalW = 360;
+    const modalH = 280;
+    const modalX = width / 2;
+    const modalY = height / 2;
+
+    this.statsOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+    this.statsOverlay.setInteractive();
+
+    this.statsModalBg = this.add.rectangle(modalX, modalY, modalW, modalH, getBgColor().hex, 1);
+    this.statsModalBg.setStrokeStyle(2, 0xe94560);
+
+    const titleText = this.add.text(modalX, modalY - modalH / 2 + 24, "ALL-TIME STATS", {
+      fontSize: "20px",
+      fontFamily: "monospace",
+      color: "#e94560",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.statsDynamicObjects.push(titleText);
+
+    const closeBtn = this.add.text(modalX + modalW / 2 - 20, modalY - modalH / 2 + 12, "\u2715", {
+      fontSize: "20px",
+      fontFamily: "monospace",
+      color: "#888888",
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.statsDynamicObjects.push(closeBtn);
+    closeBtn.on("pointerover", () => closeBtn.setColor("#ffffff"));
+    closeBtn.on("pointerout", () => closeBtn.setColor("#888888"));
+    closeBtn.on("pointerdown", () => this.closeStats());
+
+    const stats = getStats();
+    const leftX = modalX - modalW / 2 + 30;
+    const rightX = modalX + modalW / 2 - 30;
+    let curY = modalY - modalH / 2 + 64;
+    const rowH = 40;
+
+    const statRows: { label: string; value: number; color: string }[] = [
+      { label: "Coins Earned", value: stats.totalCoinsEarned, color: "#ffd700" },
+      { label: "Coins Spent", value: stats.totalCoinsSpent, color: "#ff8844" },
+      { label: "Total Deaths", value: stats.totalDeaths, color: "#ff4444" },
+      { label: "Levels Completed", value: stats.totalLevelCompletions, color: "#00ff88" },
+    ];
+
+    statRows.forEach((row) => {
+      const labelText = this.add.text(leftX, curY, row.label, {
+        fontSize: "15px",
+        fontFamily: "monospace",
+        color: "#cccccc",
+      }).setOrigin(0, 0.5);
+      this.statsDynamicObjects.push(labelText);
+
+      const valueText = this.add.text(rightX, curY, row.value.toLocaleString(), {
+        fontSize: "18px",
+        fontFamily: "monospace",
+        color: row.color,
+        fontStyle: "bold",
+      }).setOrigin(1, 0.5);
+      this.statsDynamicObjects.push(valueText);
+
+      curY += rowH;
+    });
+
+    const divider = this.add.rectangle(modalX, curY + 4, modalW - 60, 1, 0x444466, 0.5);
+    this.statsDynamicObjects.push(divider);
+  }
+
+  private closeStats() {
+    this.statsOpen = false;
+    this.statsDynamicObjects.forEach(obj => obj.destroy());
+    this.statsDynamicObjects = [];
+    if (this.statsOverlay) {
+      this.statsOverlay.destroy();
+      this.statsOverlay = null;
+    }
+    if (this.statsModalBg) {
+      this.statsModalBg.destroy();
+      this.statsModalBg = null;
+    }
   }
 
   private getModalDimensions() {

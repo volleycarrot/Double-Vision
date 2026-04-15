@@ -101,7 +101,7 @@ export async function registerRequest(usr: string, pwd: string): Promise<{ succe
   }
 }
 
-export async function loadUserData(): Promise<{ coins: number; progress: any[]; accessories: any[] } | null> {
+export async function loadUserData(): Promise<{ coins: number; progress: any[]; accessories: any[]; stats: { totalCoinsEarned: number; totalCoinsSpent: number; totalDeaths: number; totalLevelCompletions: number } | null } | null> {
   if (!isLoggedIn()) return null;
   try {
     const res = await apiRequest("/user/data");
@@ -140,6 +140,16 @@ export async function syncAccessories(owned: string[], equipped: Record<string, 
     await apiRequest("/user/accessories", {
       method: "POST",
       body: JSON.stringify({ owned, equipped }),
+    });
+  } catch {}
+}
+
+export async function syncStats(stats: { totalCoinsEarned: number; totalCoinsSpent: number; totalDeaths: number; totalLevelCompletions: number }): Promise<void> {
+  if (!isLoggedIn()) return;
+  try {
+    await apiRequest("/user/stats", {
+      method: "POST",
+      body: JSON.stringify(stats),
     });
   } catch {}
 }

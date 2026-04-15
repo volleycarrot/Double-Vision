@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } from "../worlds/WorldConfig";
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
+import { recordDeath, recordLevelCompletion } from "../StatsManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
 import { drawAccessories } from "../AccessoryManager";
 import { getCoins, addCoins } from "../CoinManager";
@@ -1663,6 +1664,7 @@ export class GameScene extends Phaser.Scene {
     if (this.isDead || this.isCompletingWorld) return;
     this.isDead = true;
     this.deaths++;
+    recordDeath();
 
     if (!fromRemote && this.gameMode === "online") {
       onlineManager.sendDeath();
@@ -1705,6 +1707,7 @@ export class GameScene extends Phaser.Scene {
     this.isCompletingWorld = true;
 
     markWorldCompleted(this.worldIndex, this.deaths);
+    recordLevelCompletion();
 
     const baseReward = Math.max(0, 10 - this.deaths);
     const multiplier = this.gameMode === "online" ? 3 : 1;

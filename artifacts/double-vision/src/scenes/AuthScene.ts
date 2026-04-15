@@ -4,6 +4,7 @@ import { loginRequest, registerRequest, isLoggedIn, loadUserData } from "../Auth
 import { loadServerData as loadServerCoins } from "../CoinManager";
 import { loadServerData as loadServerProgress } from "../ProgressManager";
 import { loadServerData as loadServerAccessories } from "../AccessoryManager";
+import { loadServerData as loadServerStats } from "../StatsManager";
 
 type AuthMode = "menu" | "login" | "register";
 
@@ -260,6 +261,9 @@ export class AuthScene extends Phaser.Scene {
         loadServerCoins(data.coins);
         loadServerProgress(data.progress);
         loadServerAccessories(data.accessories);
+        if (data.stats) {
+          loadServerStats(data.stats);
+        }
       }
     } catch {}
     this.scene.start("ModeSelectScene");

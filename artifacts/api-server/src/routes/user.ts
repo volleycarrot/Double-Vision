@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, usersTable, userProgressTable, userAccessoriesTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, usersTable, userProgressTable, userAccessoriesTable, userStatsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
 import { authRequired } from "../middleware/auth";
 
 const router: IRouter = Router();
@@ -17,6 +17,8 @@ router.get("/user/data", authRequired, async (req, res) => {
     const progress = await db.select().from(userProgressTable).where(eq(userProgressTable.userId, userId));
     const accessories = await db.select().from(userAccessoriesTable).where(eq(userAccessoriesTable.userId, userId));
 
+    const [userStatsRow] = await db.select().from(userStatsTable).where(eq(userStatsTable.userId, userId)).limit(1);
+
     res.json({
       coins: user.coins,
       progress: progress.map(p => ({
@@ -28,6 +30,12 @@ router.get("/user/data", authRequired, async (req, res) => {
         accessoryId: a.accessoryId,
         equipped: a.equipped,
       })),
+      stats: userStatsRow ? {
+        totalCoinsEarned: userStatsRow.totalCoinsEarned,
+        totalCoinsSpent: userStatsRow.totalCoinsSpent,
+        totalDeaths: userStatsRow.totalDeaths,
+        totalLevelCompletions: userStatsRow.totalLevelCompletions,
+      } : null,
     });
   } catch (err) {
     console.error("Get user data error:", err);
@@ -123,6 +131,49 @@ router.post("/user/accessories", authRequired, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Update accessories error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/user/stats", authRequired, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const { totalCoinsEarned, totalCoinsSpent, totalDeaths, totalLevelCompletions } = req.body;
+
+    const fields = { totalCoinsEarned, totalCoinsSpent, totalDeaths, totalLevelCompletions };
+    for (const [key, val] of Object.entries(fields)) {
+      if (typeof val !== "number" || !Number.isInteger(val) || val < 0 || val > 99999999) {
+        res.status(400).json({ error: `Invalid value for ${key}` });
+        return;
+      }
+    }
+
+    const existing = await db.select().from(userStatsTable)
+      .where(eq(userStatsTable.userId, userId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db.update(userStatsTable)
+        .set({
+          totalCoinsEarned: sql`GREATEST(${userStatsTable.totalCoinsEarned}, ${totalCoinsEarned})`,
+          totalCoinsSpent: sql`GREATEST(${userStatsTable.totalCoinsSpent}, ${totalCoinsSpent})`,
+          totalDeaths: sql`GREATEST(${userStatsTable.totalDeaths}, ${totalDeaths})`,
+          totalLevelCompletions: sql`GREATEST(${userStatsTable.totalLevelCompletions}, ${totalLevelCompletions})`,
+        })
+        .where(eq(userStatsTable.userId, userId));
+    } else {
+      await db.insert(userStatsTable).values({
+        userId,
+        totalCoinsEarned,
+        totalCoinsSpent,
+        totalDeaths,
+        totalLevelCompletions,
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Update stats error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

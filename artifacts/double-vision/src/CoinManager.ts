@@ -1,4 +1,5 @@
 import { isLoggedIn, syncCoins } from "./AuthManager";
+import { recordCoinsEarned, recordCoinsSpent } from "./StatsManager";
 
 const STORAGE_KEY = "double-vision-coins";
 
@@ -32,6 +33,7 @@ export function addCoins(amount: number): void {
   if (amount <= 0 || !Number.isFinite(amount)) return;
   coinBalance += Math.floor(amount);
   save();
+  recordCoinsEarned(Math.floor(amount));
 }
 
 export function spendCoins(amount: number): boolean {
@@ -39,6 +41,7 @@ export function spendCoins(amount: number): boolean {
   if (coinBalance < amount) return false;
   coinBalance -= Math.floor(amount);
   save();
+  recordCoinsSpent(Math.floor(amount));
   return true;
 }
 
