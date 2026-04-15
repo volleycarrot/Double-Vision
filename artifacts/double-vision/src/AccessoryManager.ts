@@ -96,6 +96,147 @@ export function getEquippedAccessories(): Accessory[] {
   return result;
 }
 
+export function drawSingleAccessory(
+  gfx: Phaser.GameObjects.Graphics,
+  accId: string,
+  centerX: number,
+  centerY: number,
+  bodyWidth: number,
+  bodyHeight: number
+) {
+  const topY = centerY - bodyHeight / 2;
+  const eyeOffsetY = getEyeOffsetY(bodyHeight);
+  const eyeY = centerY + eyeOffsetY;
+  _drawAccessoryById(gfx, accId, centerX, centerY, bodyWidth, bodyHeight, topY, eyeY);
+}
+
+function _drawAccessoryById(
+  gfx: Phaser.GameObjects.Graphics,
+  accId: string,
+  centerX: number,
+  centerY: number,
+  bodyWidth: number,
+  bodyHeight: number,
+  topY: number,
+  eyeY: number
+) {
+  switch (accId) {
+    case "tophat": {
+      gfx.fillStyle(0x222222, 1);
+      gfx.fillRect(centerX - bodyWidth / 2 - 2, topY - 4, bodyWidth + 4, 4);
+      gfx.fillRect(centerX - 8, topY - 18, 16, 14);
+      gfx.lineStyle(1, 0x444444, 1);
+      gfx.strokeRect(centerX - 8, topY - 18, 16, 14);
+      gfx.fillStyle(0xcc8800, 1);
+      gfx.fillRect(centerX - 7, topY - 8, 14, 2);
+      break;
+    }
+    case "crown": {
+      gfx.fillStyle(0xffd700, 1);
+      gfx.fillRect(centerX - 10, topY - 6, 20, 6);
+      gfx.fillTriangle(centerX - 10, topY - 6, centerX - 10, topY - 14, centerX - 4, topY - 6);
+      gfx.fillTriangle(centerX - 3, topY - 6, centerX, topY - 16, centerX + 3, topY - 6);
+      gfx.fillTriangle(centerX + 10, topY - 6, centerX + 10, topY - 14, centerX + 4, topY - 6);
+      gfx.fillStyle(0xff0000, 1);
+      gfx.fillCircle(centerX, topY - 10, 2);
+      break;
+    }
+    case "partyhat": {
+      gfx.fillStyle(0xff4488, 1);
+      gfx.fillTriangle(centerX - 10, topY, centerX, topY - 20, centerX + 10, topY);
+      gfx.fillStyle(0xffdd00, 1);
+      gfx.fillCircle(centerX, topY - 20, 3);
+      gfx.fillStyle(0x44ccff, 1);
+      gfx.fillRect(centerX - 6, topY - 8, 3, 3);
+      gfx.fillStyle(0x44ff44, 1);
+      gfx.fillRect(centerX + 3, topY - 14, 3, 3);
+      break;
+    }
+    case "cowboy": {
+      gfx.fillStyle(0x8b4513, 1);
+      gfx.fillRect(centerX - bodyWidth / 2 - 4, topY - 3, bodyWidth + 8, 4);
+      gfx.fillRect(centerX - 9, topY - 12, 18, 9);
+      gfx.fillStyle(0xa0522d, 1);
+      gfx.fillRect(centerX - 9, topY - 12, 18, 3);
+      break;
+    }
+    case "beanie": {
+      gfx.fillStyle(0x3366cc, 1);
+      gfx.fillRect(centerX - bodyWidth / 2, topY - 8, bodyWidth, 9);
+      gfx.fillStyle(0x4488ee, 1);
+      gfx.fillRect(centerX - bodyWidth / 2, topY - 8, bodyWidth, 3);
+      gfx.fillStyle(0xff4444, 1);
+      gfx.fillCircle(centerX, topY - 10, 3);
+      break;
+    }
+    case "halo": {
+      gfx.lineStyle(2, 0xffdd44, 0.9);
+      gfx.strokeEllipse(centerX, topY - 8, 24, 8);
+      break;
+    }
+    case "sunglasses": {
+      gfx.fillStyle(0x111111, 1);
+      gfx.fillRect(centerX - EYE.SPACING - 5, eyeY - 3, 10, 7);
+      gfx.fillRect(centerX + EYE.SPACING - 5, eyeY - 3, 10, 7);
+      gfx.lineStyle(1, 0x333333, 1);
+      gfx.lineBetween(centerX - EYE.SPACING + 5, eyeY, centerX + EYE.SPACING - 5, eyeY);
+      break;
+    }
+    case "nerdglasses": {
+      gfx.lineStyle(2, 0x333333, 1);
+      gfx.strokeCircle(centerX - EYE.SPACING, eyeY, 5);
+      gfx.strokeCircle(centerX + EYE.SPACING, eyeY, 5);
+      gfx.lineBetween(centerX - EYE.SPACING + 5, eyeY, centerX + EYE.SPACING - 5, eyeY);
+      break;
+    }
+    case "monocle": {
+      gfx.lineStyle(2, 0xccaa00, 1);
+      gfx.strokeCircle(centerX + EYE.SPACING, eyeY, 6);
+      gfx.lineStyle(1, 0xccaa00, 0.6);
+      gfx.lineBetween(centerX + EYE.SPACING, eyeY + 6, centerX + EYE.SPACING - 4, centerY + bodyHeight / 2);
+      break;
+    }
+    case "cape": {
+      gfx.fillStyle(0xcc0000, 0.85);
+      gfx.fillRect(centerX - bodyWidth / 2 - 6, topY + 4, 6, bodyHeight - 4);
+      gfx.fillTriangle(
+        centerX - bodyWidth / 2 - 6, centerY + bodyHeight / 2,
+        centerX - bodyWidth / 2 - 10, centerY + bodyHeight / 2 + 8,
+        centerX - bodyWidth / 2, centerY + bodyHeight / 2
+      );
+      break;
+    }
+    case "scarf": {
+      gfx.fillStyle(0xcc3333, 0.9);
+      gfx.fillRect(centerX - bodyWidth / 2 - 2, topY + 6, bodyWidth + 4, 6);
+      gfx.fillRect(centerX + bodyWidth / 2 - 2, topY + 12, 5, 10);
+      gfx.fillStyle(0xeeee44, 1);
+      gfx.fillRect(centerX + bodyWidth / 2 - 1, topY + 12, 3, 2);
+      gfx.fillRect(centerX + bodyWidth / 2 - 1, topY + 18, 3, 2);
+      break;
+    }
+    case "bowtie": {
+      const bowY = centerY + bodyHeight * 0.15;
+      gfx.fillStyle(0xff2244, 1);
+      gfx.fillTriangle(centerX, bowY, centerX - 6, bowY - 4, centerX - 6, bowY + 4);
+      gfx.fillTriangle(centerX, bowY, centerX + 6, bowY - 4, centerX + 6, bowY + 4);
+      gfx.fillStyle(0xcc1133, 1);
+      gfx.fillCircle(centerX, bowY, 2);
+      break;
+    }
+    case "medal": {
+      const medalY = centerY + bodyHeight * 0.1;
+      gfx.lineStyle(1, 0x4444ff, 0.8);
+      gfx.lineBetween(centerX, topY + 4, centerX, medalY);
+      gfx.fillStyle(0xffd700, 1);
+      gfx.fillCircle(centerX, medalY + 4, 5);
+      gfx.fillStyle(0xffaa00, 1);
+      gfx.fillCircle(centerX, medalY + 4, 3);
+      break;
+    }
+  }
+}
+
 export function drawAccessories(
   gfx: Phaser.GameObjects.Graphics,
   centerX: number,
@@ -110,120 +251,6 @@ export function drawAccessories(
   const eyeY = centerY + eyeOffsetY;
 
   for (const acc of equipped) {
-    switch (acc.id) {
-      case "tophat": {
-        gfx.fillStyle(0x222222, 1);
-        gfx.fillRect(centerX - bodyWidth / 2 - 2, topY - 4, bodyWidth + 4, 4);
-        gfx.fillRect(centerX - 8, topY - 18, 16, 14);
-        gfx.lineStyle(1, 0x444444, 1);
-        gfx.strokeRect(centerX - 8, topY - 18, 16, 14);
-        gfx.fillStyle(0xcc8800, 1);
-        gfx.fillRect(centerX - 7, topY - 8, 14, 2);
-        break;
-      }
-      case "crown": {
-        gfx.fillStyle(0xffd700, 1);
-        gfx.fillRect(centerX - 10, topY - 6, 20, 6);
-        gfx.fillTriangle(centerX - 10, topY - 6, centerX - 10, topY - 14, centerX - 4, topY - 6);
-        gfx.fillTriangle(centerX - 3, topY - 6, centerX, topY - 16, centerX + 3, topY - 6);
-        gfx.fillTriangle(centerX + 10, topY - 6, centerX + 10, topY - 14, centerX + 4, topY - 6);
-        gfx.fillStyle(0xff0000, 1);
-        gfx.fillCircle(centerX, topY - 10, 2);
-        break;
-      }
-      case "partyhat": {
-        gfx.fillStyle(0xff4488, 1);
-        gfx.fillTriangle(centerX - 10, topY, centerX, topY - 20, centerX + 10, topY);
-        gfx.fillStyle(0xffdd00, 1);
-        gfx.fillCircle(centerX, topY - 20, 3);
-        gfx.fillStyle(0x44ccff, 1);
-        gfx.fillRect(centerX - 6, topY - 8, 3, 3);
-        gfx.fillStyle(0x44ff44, 1);
-        gfx.fillRect(centerX + 3, topY - 14, 3, 3);
-        break;
-      }
-      case "cowboy": {
-        gfx.fillStyle(0x8b4513, 1);
-        gfx.fillRect(centerX - bodyWidth / 2 - 4, topY - 3, bodyWidth + 8, 4);
-        gfx.fillRect(centerX - 9, topY - 12, 18, 9);
-        gfx.fillStyle(0xa0522d, 1);
-        gfx.fillRect(centerX - 9, topY - 12, 18, 3);
-        break;
-      }
-      case "beanie": {
-        gfx.fillStyle(0x3366cc, 1);
-        gfx.fillRect(centerX - bodyWidth / 2, topY - 8, bodyWidth, 9);
-        gfx.fillStyle(0x4488ee, 1);
-        gfx.fillRect(centerX - bodyWidth / 2, topY - 8, bodyWidth, 3);
-        gfx.fillStyle(0xff4444, 1);
-        gfx.fillCircle(centerX, topY - 10, 3);
-        break;
-      }
-      case "halo": {
-        gfx.lineStyle(2, 0xffdd44, 0.9);
-        gfx.strokeEllipse(centerX, topY - 8, 24, 8);
-        break;
-      }
-      case "sunglasses": {
-        gfx.fillStyle(0x111111, 1);
-        gfx.fillRect(centerX - EYE.SPACING - 5, eyeY - 3, 10, 7);
-        gfx.fillRect(centerX + EYE.SPACING - 5, eyeY - 3, 10, 7);
-        gfx.lineStyle(1, 0x333333, 1);
-        gfx.lineBetween(centerX - EYE.SPACING + 5, eyeY, centerX + EYE.SPACING - 5, eyeY);
-        break;
-      }
-      case "nerdglasses": {
-        gfx.lineStyle(2, 0x333333, 1);
-        gfx.strokeCircle(centerX - EYE.SPACING, eyeY, 5);
-        gfx.strokeCircle(centerX + EYE.SPACING, eyeY, 5);
-        gfx.lineBetween(centerX - EYE.SPACING + 5, eyeY, centerX + EYE.SPACING - 5, eyeY);
-        break;
-      }
-      case "monocle": {
-        gfx.lineStyle(2, 0xccaa00, 1);
-        gfx.strokeCircle(centerX + EYE.SPACING, eyeY, 6);
-        gfx.lineStyle(1, 0xccaa00, 0.6);
-        gfx.lineBetween(centerX + EYE.SPACING, eyeY + 6, centerX + EYE.SPACING - 4, centerY + bodyHeight / 2);
-        break;
-      }
-      case "cape": {
-        gfx.fillStyle(0xcc0000, 0.85);
-        gfx.fillRect(centerX - bodyWidth / 2 - 6, topY + 4, 6, bodyHeight - 4);
-        gfx.fillTriangle(
-          centerX - bodyWidth / 2 - 6, centerY + bodyHeight / 2,
-          centerX - bodyWidth / 2 - 10, centerY + bodyHeight / 2 + 8,
-          centerX - bodyWidth / 2, centerY + bodyHeight / 2
-        );
-        break;
-      }
-      case "scarf": {
-        gfx.fillStyle(0xcc3333, 0.9);
-        gfx.fillRect(centerX - bodyWidth / 2 - 2, topY + 6, bodyWidth + 4, 6);
-        gfx.fillRect(centerX + bodyWidth / 2 - 2, topY + 12, 5, 10);
-        gfx.fillStyle(0xeeee44, 1);
-        gfx.fillRect(centerX + bodyWidth / 2 - 1, topY + 12, 3, 2);
-        gfx.fillRect(centerX + bodyWidth / 2 - 1, topY + 18, 3, 2);
-        break;
-      }
-      case "bowtie": {
-        const bowY = centerY + bodyHeight * 0.15;
-        gfx.fillStyle(0xff2244, 1);
-        gfx.fillTriangle(centerX, bowY, centerX - 6, bowY - 4, centerX - 6, bowY + 4);
-        gfx.fillTriangle(centerX, bowY, centerX + 6, bowY - 4, centerX + 6, bowY + 4);
-        gfx.fillStyle(0xcc1133, 1);
-        gfx.fillCircle(centerX, bowY, 2);
-        break;
-      }
-      case "medal": {
-        const medalY = centerY + bodyHeight * 0.1;
-        gfx.lineStyle(1, 0x4444ff, 0.8);
-        gfx.lineBetween(centerX, topY + 4, centerX, medalY);
-        gfx.fillStyle(0xffd700, 1);
-        gfx.fillCircle(centerX, medalY + 4, 5);
-        gfx.fillStyle(0xffaa00, 1);
-        gfx.fillCircle(centerX, medalY + 4, 3);
-        break;
-      }
-    }
+    _drawAccessoryById(gfx, acc.id, centerX, centerY, bodyWidth, bodyHeight, topY, eyeY);
   }
 }

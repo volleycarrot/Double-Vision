@@ -8,6 +8,7 @@ import {
   unequipCategory,
   getEquipped,
   drawAccessories,
+  drawSingleAccessory,
   type Accessory,
 } from "../AccessoryManager";
 import {
@@ -259,12 +260,29 @@ export class ShopScene extends Phaser.Scene {
       bg.setStrokeStyle(2, equipped ? 0x00ff88 : owned ? 0x335588 : 0x222244);
       this.scrollContainer!.add(bg);
 
-      const emoji = this.add
-        .text(listX - itemW / 2 + 24, y + ITEM_H / 2, item.emoji, {
-          fontSize: "24px",
-        })
-        .setOrigin(0.5);
-      this.scrollContainer!.add(emoji);
+      const iconSize = 24;
+      const iconX = listX - itemW / 2 + 24;
+      const iconY = y + ITEM_H / 2;
+      const iconCenterY: Record<string, number> = {
+        tophat: 19,
+        crown: 18,
+        partyhat: 21,
+        cowboy: 15,
+        beanie: 16,
+        halo: 18,
+        sunglasses: 3,
+        nerdglasses: 5,
+        monocle: 0,
+        cape: -6,
+        scarf: -4,
+        bowtie: -3,
+        medal: -3,
+      };
+      const iconGfx = this.add.graphics();
+      iconGfx.setPosition(iconX, iconY);
+      const yOffset = iconCenterY[item.id] ?? 0;
+      drawSingleAccessory(iconGfx, item.id, 0, yOffset, iconSize * 0.7, iconSize * 0.8);
+      this.scrollContainer!.add(iconGfx);
 
       const name = this.add
         .text(listX - itemW / 2 + 56, y + ITEM_H / 2 - 8, item.name, {
