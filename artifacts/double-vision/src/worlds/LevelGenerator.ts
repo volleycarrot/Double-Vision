@@ -26,6 +26,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
   const hazardOccupied = new Set<number>();
   const noGroundColumns = new Set<number>();
   const quicksandColumns = new Set<number>();
+  const gapRanges: { start: number; width: number }[] = [];
   const isLavaWorld = worldIndex === 0;
   const isBeachWorld = worldIndex === 1;
   const isJungleWorld = worldIndex === 2;
@@ -81,6 +82,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
         for (let g = 1; g < gapWidth; g++) {
           hazardOccupied.add(x + g);
         }
+        gapRanges.push({ start: x, width: gapWidth });
       }
     }
 
@@ -138,8 +140,31 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
 
     if (rand() < 0.12 + difficulty * 0.08) {
-      const platY = groundLevel - 3 - Math.floor(rand() * 3);
+      let platY = groundLevel - 3 - Math.floor(rand() * 3);
       const platLen = 2 + Math.floor(rand() * 3);
+
+      const GAP_CLEARANCE = 2;
+      let nearGap = false;
+      for (const gap of gapRanges) {
+        if (gap.width < 2) continue;
+        const gapEnd = gap.start + gap.width - 1;
+        for (let px = 0; px < platLen; px++) {
+          const col = x + px;
+          if (col >= gap.start - GAP_CLEARANCE && col <= gapEnd + GAP_CLEARANCE) {
+            nearGap = true;
+            break;
+          }
+        }
+        if (nearGap) break;
+      }
+
+      if (nearGap) {
+        const minY = groundLevel - 6;
+        if (platY > minY) {
+          platY = minY;
+        }
+      }
+
       for (let px = 0; px < platLen && x + px < LEVEL_WIDTH; px++) {
         tiles.push({ x: x + px, y: platY, type: "platform" });
       }
@@ -319,6 +344,23 @@ export function generateLevel(worldIndex: number): LevelTile[] {
             tiles.push({ x: safeX, y: groundLevel, type: "ground" });
             tiles.push({ x: safeX, y: groundLevel + 1, type: "ground" });
           }
+        }
+      }
+    }
+  }
+
+  const GAP_CLEARANCE_POST = 2;
+  const MIN_PLATFORM_Y_NEAR_GAP = groundLevel - 6;
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (t.type !== "platform") continue;
+    for (const gap of gapRanges) {
+      if (gap.width < 2) continue;
+      const gapEnd = gap.start + gap.width - 1;
+      if (t.x >= gap.start - GAP_CLEARANCE_POST && t.x <= gapEnd + GAP_CLEARANCE_POST) {
+        if (t.y > MIN_PLATFORM_Y_NEAR_GAP) {
+          tiles.splice(i, 1);
+          break;
         }
       }
     }
