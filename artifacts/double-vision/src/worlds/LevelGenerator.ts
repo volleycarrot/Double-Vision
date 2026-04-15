@@ -288,62 +288,93 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
   }
 
-  const MAX_CONSECUTIVE_UNSAFE = 5;
-  const isColumnUnsafe = (col: number): boolean => {
+  const WINDOW_SIZE = 6;
+  const MAX_OBSTACLES_PER_WINDOW = 3;
+  const obstacleTypes = new Set(["kill", "spike"]);
+
+  const isObstacleColumn = (col: number): boolean => {
     const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
     if (!hasGround) return true;
-    const hasHazard = tiles.some(t =>
-      (t.type === "kill" || t.type === "spike" || t.type === "movement") &&
-      t.x <= col && col < t.x + (t.width ?? 1) &&
-      (t.y === groundLevel || t.y === groundLevel - 1)
-    );
-    return hasHazard;
+    return tiles.some(t => {
+      if (!obstacleTypes.has(t.type)) return false;
+      const tStart = t.x;
+      const tEnd = t.x + (t.width ?? 1) - 1;
+      return col >= tStart && col <= tEnd;
+    });
   };
-  for (let x = 0; x < LEVEL_WIDTH; x++) {
-    const isUnsafe = isColumnUnsafe(x);
 
-    if (isUnsafe) {
-      let runStart = x;
-      let runLen = 1;
-      while (runLen < MAX_CONSECUTIVE_UNSAFE && x + 1 < LEVEL_WIDTH) {
-        const nextX = x + 1;
-        const nextUnsafe = isColumnUnsafe(nextX);
-        if (!nextUnsafe) break;
-        x++;
-        runLen++;
+  const removeObstacleAt = (col: number): void => {
+    for (let i = tiles.length - 1; i >= 0; i--) {
+      const t = tiles[i];
+      if (!obstacleTypes.has(t.type)) continue;
+      const tStart = t.x;
+      const tEnd = t.x + (t.width ?? 1) - 1;
+      if (col < tStart || col > tEnd) continue;
+      if (t.width && t.width > 1) {
+        const origX = t.x;
+        const origWidth = t.width;
+        tiles.splice(i, 1);
+        if (col > origX) {
+          tiles.push({ ...t, x: origX, width: col - origX });
+        }
+        if (origX + origWidth > col + 1) {
+          tiles.push({ ...t, x: col + 1, width: origX + origWidth - col - 1 });
+        }
+      } else {
+        tiles.splice(i, 1);
       }
+    }
+    hazardOccupied.delete(col);
+    quicksandColumns.delete(col);
+    if (noGroundColumns.has(col)) {
+      noGroundColumns.delete(col);
+      const hasGroundNow = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
+      if (!hasGroundNow) {
+        tiles.push({ x: col, y: groundLevel, type: "ground" });
+        tiles.push({ x: col, y: groundLevel + 1, type: "ground" });
+      }
+    }
+  };
 
-      if (runLen >= MAX_CONSECUTIVE_UNSAFE) {
-        const safeX = runStart + MAX_CONSECUTIVE_UNSAFE;
-        if (safeX < LEVEL_WIDTH) {
-          for (let i = tiles.length - 1; i >= 0; i--) {
-            const t = tiles[i];
-            if ((t.type === "kill" || t.type === "spike" || t.type === "movement") &&
-                t.x <= safeX && safeX < t.x + (t.width ?? 1) &&
-                (t.y === groundLevel || t.y === groundLevel - 1)) {
-              if (t.width && t.width > 1) {
-                const origX = t.x;
-                const origWidth = t.width;
-                tiles.splice(i, 1);
-                if (safeX > origX) {
-                  tiles.push({ ...t, x: origX, width: safeX - origX });
-                }
-                if (origX + origWidth > safeX + 1) {
-                  tiles.push({ ...t, x: safeX + 1, width: origX + origWidth - safeX - 1 });
-                }
-              } else {
-                tiles.splice(i, 1);
-              }
-            }
-          }
-          noGroundColumns.delete(safeX);
-          hazardOccupied.delete(safeX);
-          quicksandColumns.delete(safeX);
-          const hasGroundNow = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === safeX);
-          if (!hasGroundNow) {
-            tiles.push({ x: safeX, y: groundLevel, type: "ground" });
-            tiles.push({ x: safeX, y: groundLevel + 1, type: "ground" });
-          }
+  for (let winStart = 0; winStart <= LEVEL_WIDTH - WINDOW_SIZE; winStart++) {
+    const obstacleCols: number[] = [];
+    for (let c = winStart; c < winStart + WINDOW_SIZE; c++) {
+      if (isObstacleColumn(c)) {
+        obstacleCols.push(c);
+      }
+    }
+    while (obstacleCols.length > MAX_OBSTACLES_PER_WINDOW) {
+      const col = obstacleCols.pop()!;
+      removeObstacleAt(col);
+    }
+  }
+
+  const MIN_PLATFORM_CLEARANCE = 3;
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (t.type !== "platform") continue;
+    const platStart = t.x;
+    const platEnd = t.x + (t.width ?? 1) - 1;
+    let highestObstacleY: number | null = null;
+    for (const obs of tiles) {
+      if (obs.type !== "kill" && obs.type !== "spike") continue;
+      const obsStart = obs.x - 1;
+      const obsEnd = obs.x + (obs.width ?? 1);
+      if (platEnd < obsStart || platStart > obsEnd) continue;
+      if (obs.y > t.y) {
+        if (highestObstacleY === null || obs.y < highestObstacleY) {
+          highestObstacleY = obs.y;
+        }
+      }
+    }
+    if (highestObstacleY !== null) {
+      const clearance = highestObstacleY - t.y;
+      if (clearance < MIN_PLATFORM_CLEARANCE) {
+        const newY = highestObstacleY - MIN_PLATFORM_CLEARANCE;
+        if (newY >= 1) {
+          tiles[i] = { ...t, y: newY };
+        } else {
+          tiles.splice(i, 1);
         }
       }
     }
@@ -382,7 +413,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
     return true;
   });
-  return filtered.filter(t => {
+  const finalTiles = filtered.filter(t => {
     if (t.type === "ground" && t.y === groundLevel && quicksandColumns.has(t.x)) {
       return false;
     }
@@ -391,4 +422,6 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
     return true;
   });
+
+  return finalTiles;
 }

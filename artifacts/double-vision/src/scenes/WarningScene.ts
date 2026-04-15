@@ -55,9 +55,9 @@ export class WarningScene extends Phaser.Scene {
       { name: world.movementName, color: world.movementColor, desc: "Movement", emoji: emojis[2] },
     ];
 
-    const startY = height * 0.45;
+    const startY = height * 0.42;
     hazards.forEach((h, i) => {
-      const y = startY + i * 50;
+      const y = startY + i * 48;
       this.add.text(width / 2 - 128, y, h.emoji, {
         fontSize: "22px",
       }).setOrigin(0.5, 0.5);
