@@ -286,6 +286,50 @@ export function generateLevel(worldIndex: number, seed?: number): LevelTile[] {
         }
       }
     }
+
+    const holeClearRadius = 4;
+    const checkpointColumns = new Set<number>();
+    for (const t of tiles) {
+      if (t.type === "checkpoint") {
+        checkpointColumns.add(t.x);
+        checkpointColumns.add(t.x + 1);
+      }
+    }
+    for (const cave of caveTiles) {
+      const caveStart = cave.x;
+      const caveEnd = cave.x + (cave.width ?? 1) - 1;
+      for (let col = caveStart - holeClearRadius; col <= caveEnd + holeClearRadius; col++) {
+        if (col < 0 || col >= LEVEL_WIDTH) continue;
+        if (checkpointColumns.has(col)) continue;
+        if (noGroundColumns.has(col)) {
+          noGroundColumns.delete(col);
+          const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
+          if (!hasGround) {
+            tiles.push({ x: col, y: groundLevel, type: "ground" });
+            tiles.push({ x: col, y: groundLevel + 1, type: "ground" });
+          }
+          if (isLavaWorld) {
+            const hasKill = tiles.some(t => t.type === "kill" && t.y === groundLevel && t.x === col);
+            if (!hasKill) {
+              tiles.push({ x: col, y: groundLevel, type: "kill" });
+            }
+          }
+        }
+      }
+    }
+
+    for (let i = gapRanges.length - 1; i >= 0; i--) {
+      const gap = gapRanges[i];
+      const gapEnd = gap.start + gap.width - 1;
+      for (const cave of caveTiles) {
+        const caveStart = cave.x;
+        const caveEndX = cave.x + (cave.width ?? 1) - 1;
+        if (gap.start <= caveEndX + holeClearRadius && gapEnd >= caveStart - holeClearRadius) {
+          gapRanges.splice(i, 1);
+          break;
+        }
+      }
+    }
   }
 
   const WINDOW_SIZE = 6;
