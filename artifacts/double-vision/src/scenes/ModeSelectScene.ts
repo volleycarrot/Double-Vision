@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { getBgColor } from "../GameSettings";
 
 export type GameMode = "single" | "multiplayer";
 
@@ -10,7 +11,7 @@ export class ModeSelectScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
 
-    this.cameras.main.setBackgroundColor("#1a1a2e");
+    this.cameras.main.setBackgroundColor(getBgColor().value);
 
     const title = this.add.text(width / 2, height * 0.18, "CHOOSE MODE", {
       fontSize: "36px",

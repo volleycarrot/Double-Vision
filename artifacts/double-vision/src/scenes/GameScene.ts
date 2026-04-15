@@ -4,6 +4,9 @@ import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
 import type { GameMode } from "./ModeSelectScene";
+import { getBindings } from "../KeyBindings";
+import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS } from "../GameSettings";
+import { toggleMusic } from "../MusicManager";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
 import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
 import type { ParallaxLayer } from "../worlds/JungleBackground";
@@ -170,21 +173,13 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, LEVEL_WIDTH * TILE, 15 * TILE);
     this.physics.world.setBounds(0, 0, LEVEL_WIDTH * TILE, 20 * TILE);
 
-    if (this.gameMode === "single") {
-      this.cursors = {
-        left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-        right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-        jump: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
-        duck: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
-      };
-    } else {
-      this.cursors = {
-        left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-        right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-        jump: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-        duck: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      };
-    }
+    const bindings = getBindings(this.gameMode);
+    this.cursors = {
+      left: this.input.keyboard!.addKey(bindings.left),
+      right: this.input.keyboard!.addKey(bindings.right),
+      jump: this.input.keyboard!.addKey(bindings.jump),
+      duck: this.input.keyboard!.addKey(bindings.duck),
+    };
 
     this.pauseKey1 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.pauseKey2 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -1471,7 +1466,7 @@ export class GameScene extends Phaser.Scene {
     const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
     this.pauseContainer.add(overlay);
 
-    const titleText = this.add.text(0, -80, "PAUSED", {
+    const titleText = this.add.text(0, -120, "PAUSED", {
       fontSize: "42px",
       fontFamily: "monospace",
       color: "#ffffff",
@@ -1479,12 +1474,76 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.pauseContainer.add(titleText);
 
+    const settings = getSettings();
+
+    const musicLabel = this.add.text(-90, -70, "Music:", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+    }).setOrigin(0, 0.5);
+    this.pauseContainer.add(musicLabel);
+
+    const musicBtnBg = this.add.rectangle(60, -70, 80, 26, settings.musicEnabled ? 0x00aa44 : 0x662222, 0.9);
+    musicBtnBg.setStrokeStyle(1, settings.musicEnabled ? 0x00ff66 : 0xff4444);
+    musicBtnBg.setInteractive({ useHandCursor: true });
+    this.pauseContainer.add(musicBtnBg);
+
+    const musicBtnLabel = this.add.text(60, -70, settings.musicEnabled ? "ON" : "OFF", {
+      fontSize: "12px",
+      fontFamily: "monospace",
+      color: "#ffffff",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.pauseContainer.add(musicBtnLabel);
+
+    musicBtnBg.on("pointerdown", () => {
+      const newVal = !getSettings().musicEnabled;
+      setMusicEnabled(newVal);
+      toggleMusic(newVal);
+      musicBtnBg.setFillStyle(newVal ? 0x00aa44 : 0x662222, 0.9);
+      musicBtnBg.setStrokeStyle(1, newVal ? 0x00ff66 : 0xff4444);
+      musicBtnLabel.setText(newVal ? "ON" : "OFF");
+    });
+
+    const bgLabel = this.add.text(-90, -40, "Background:", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+    }).setOrigin(0, 0.5);
+    this.pauseContainer.add(bgLabel);
+
+    const swatchSize = 18;
+    const swatchGap = 5;
+    const swatchStartX = 20;
+    const bgIndicators: Phaser.GameObjects.Rectangle[] = [];
+
+    BG_PRESETS.forEach((preset, i) => {
+      const sx = swatchStartX + i * (swatchSize + swatchGap);
+      const isSelected = i === settings.bgColorIndex;
+
+      const indicator = this.add.rectangle(sx, -40, swatchSize + 3, swatchSize + 3, 0xffffff, isSelected ? 1 : 0);
+      bgIndicators.push(indicator);
+      this.pauseContainer!.add(indicator);
+
+      const swatch = this.add.rectangle(sx, -40, swatchSize, swatchSize, preset.hex);
+      swatch.setStrokeStyle(1, 0x666666);
+      swatch.setInteractive({ useHandCursor: true });
+      this.pauseContainer!.add(swatch);
+
+      swatch.on("pointerdown", () => {
+        setBgColorIndex(i);
+        bgIndicators.forEach((ind, j) => {
+          ind.setFillStyle(0xffffff, j === i ? 1 : 0);
+        });
+      });
+    });
+
     const btnW = 200;
     const btnH = 44;
     const buttons = [
-      { label: "Unpause", y: -10, action: () => this.unpause() },
-      { label: "Restart", y: 50, action: () => this.restartWorld() },
-      { label: "Home", y: 110, action: () => this.goHome() },
+      { label: "Unpause", y: 10, action: () => this.unpause() },
+      { label: "Restart", y: 62, action: () => this.restartWorld() },
+      { label: "Home", y: 114, action: () => this.goHome() },
     ];
 
     buttons.forEach((btn) => {

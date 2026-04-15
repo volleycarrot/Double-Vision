@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { getSelectedColor, EYE, getEyeOffsetY } from "../PlayerConfig";
+import { getBgColor } from "../GameSettings";
+import { initMusicOnInteraction } from "../MusicManager";
 
 export class StartScene extends Phaser.Scene {
   constructor() {
@@ -8,8 +10,10 @@ export class StartScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    const bg = getBgColor();
 
-    this.cameras.main.setBackgroundColor("#1a1a2e");
+    this.cameras.main.setBackgroundColor(bg.value);
+    initMusicOnInteraction();
 
     const title = this.add.text(width / 2, height * 0.25, "DOUBLE VISION", {
       fontSize: "52px",

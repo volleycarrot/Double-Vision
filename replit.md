@@ -30,14 +30,27 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - Completing a world returns to title; completing all 4 shows WinScene
 
 ### Controls
-- **Player 1**: W (jump), S (duck)
-- **Player 2**: Left/Right arrows (move)
+- **Player 1**: W (jump), S (duck) — customizable via settings
+- **Player 2**: Left/Right arrows (move) — customizable via settings
+- **Single Player**: Arrow keys for all controls — customizable via settings
 - **Pause**: Escape or P
+- Controls can be remapped via the settings gear icon on the TitleScene
+- In multiplayer, Player 1 keys are restricted to letter keys (A-Z), Player 2 to arrow/nav keys
+- Custom bindings persist in localStorage
+
+### Settings
+- **Music**: Procedural Web Audio API music, toggleable ON/OFF from settings modal or pause menu
+- **Background Color**: 6 presets (Midnight, Charcoal, Deep Blue, Dark Green, Dark Purple, Dark Red)
+- Settings accessible from TitleScene gear icon and in-game pause menu
+- All settings persist in localStorage
 
 ### Key Files
 - `src/main.ts` - Phaser config and game initialization
+- `src/KeyBindings.ts` - Key binding configuration module with localStorage persistence
+- `src/GameSettings.ts` - Settings persistence (music, background color)
+- `src/MusicManager.ts` - Procedural music via Web Audio API
 - `src/ProgressManager.ts` - localStorage progress read/write (completion, deaths)
-- `src/scenes/TitleScene.ts` - Title screen with world gallery and controls
+- `src/scenes/TitleScene.ts` - Title screen with world gallery, controls display, and settings modal
 - `src/scenes/WarningScene.ts` - Pre-world hazard warning
 - `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints, pause menu
 - `src/scenes/WinScene.ts` - Victory screen with stats (shown when all 4 worlds complete)
