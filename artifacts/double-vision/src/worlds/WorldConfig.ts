@@ -55,15 +55,15 @@ export const WORLDS: WorldConfig[] = [
   {
     name: "War Zone",
     bgColor: 0x2a2a2a,
-    groundColor: 0x4a4a4a,
-    platformColor: 0x5a5a5a,
+    groundColor: 0x3a3a3a,
+    platformColor: 0x4a4a4a,
     killBlockName: "Mine",
-    killBlockColor: 0x8b0000,
+    killBlockColor: 0xaa0000,
     spikeName: "Barbed Wire",
-    spikeColor: 0x808080,
-    movementName: "Tank Push",
-    movementColor: 0x556b2f,
-    checkpointColor: 0x00ff00,
+    spikeColor: 0x999999,
+    movementName: "Trench",
+    movementColor: 0x6b4226,
+    checkpointColor: 0xffcc00,
   },
 ];
 

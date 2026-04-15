@@ -44,9 +44,13 @@ export class GameScene extends Phaser.Scene {
   private grabbedVine: { pivot: Phaser.GameObjects.Graphics; anchorGfx: Phaser.GameObjects.Graphics; platform: Phaser.GameObjects.Rectangle; angle: number; baseX: number; anchorY: number; ropeLen: number } | null = null;
   private vineGrabCooldown: number = 0;
   private vineGrabGfx: Phaser.GameObjects.Graphics | null = null;
-  private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number }[] = [];
+  private tankPushers: { rect: Phaser.GameObjects.Rectangle; dir: number; leftBound: number; rightBound: number; topY: number; bottomY: number }[] = [];
+  private insideTank: typeof this.tankPushers[number] | null = null;
+  private tankExitCooldown: number = 0;
+  private groundCollider!: Phaser.Physics.Arcade.Collider;
   private bullets: Phaser.Physics.Arcade.Group | null = null;
   private bulletTimer: number = 0;
+  private bulletVisuals: { hitZone: Phaser.GameObjects.Rectangle; container: Phaser.GameObjects.Container }[] = [];
   private isPaused: boolean = false;
   private pauseContainer: Phaser.GameObjects.Container | null = null;
   private pauseKey1!: Phaser.Input.Keyboard.Key;
@@ -88,8 +92,11 @@ export class GameScene extends Phaser.Scene {
     this.vineGrabCooldown = 0;
     this.vineGrabGfx = null;
     this.tankPushers = [];
+    this.insideTank = null;
+    this.tankExitCooldown = 0;
     this.bullets = null;
     this.bulletTimer = 0;
+    this.bulletVisuals = [];
 
     const world = WORLDS[this.worldIndex];
 
@@ -120,7 +127,7 @@ export class GameScene extends Phaser.Scene {
 
     this.eyesGfx = this.add.graphics().setDepth(10);
 
-    this.physics.add.collider(this.player, this.groundGroup);
+    this.groundCollider = this.physics.add.collider(this.player, this.groundGroup);
     this.physics.add.collider(this.player, this.platformGroup);
     this.physics.add.collider(this.player, this.caveGroup);
 
@@ -288,7 +295,7 @@ export class GameScene extends Phaser.Scene {
               sandGfx.fillStyle(sandRng(i + 30) > 0.5 ? 0xa07830 : 0xd4a84a, 0.6);
               sandGfx.fillCircle(sx, sy, dotSize);
             }
-          } else {
+          } else if (this.worldIndex !== 3) {
             const k = this.add.rectangle(px, py, TILE, TILE, world.killBlockColor);
             k.setStrokeStyle(1, 0xffffff, 0.2);
             this.killGroup.add(k);
@@ -493,10 +500,23 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 3: {
-        const wire = this.add.rectangle(px, py, TILE, 8, world.spikeColor);
-        wire.setStrokeStyle(1, 0xaaaaaa);
-        this.spikeGroup.add(wire);
-        (wire.body as Phaser.Physics.Arcade.Body).setSize(TILE, 8);
+        const wireColor = world.spikeColor;
+        const wireTint = Phaser.Display.Color.IntegerToColor(wireColor).brighten(20).color;
+        const wireContainer = this.add.container(px, py);
+        const wireBar = this.add.rectangle(0, 0, TILE, 4, wireColor);
+        wireBar.setStrokeStyle(1, wireTint);
+        const barbSpacing = 8;
+        const barbCount = Math.floor(TILE / barbSpacing);
+        for (let i = 0; i < barbCount; i++) {
+          const bx = -TILE / 2 + barbSpacing / 2 + i * barbSpacing;
+          const barbUp = this.add.triangle(bx, -4, 0, -4, -2, 0, 2, 0, wireTint);
+          const barbDown = this.add.triangle(bx, 4, 0, 4, -2, 0, 2, 0, wireTint);
+          wireContainer.add([barbUp, barbDown]);
+        }
+        wireContainer.add(wireBar);
+        this.spikeGroup.add(this.add.rectangle(px, py, TILE, 8, 0x000000, 0));
+        const hitBody = this.spikeGroup.getLast(true) as Phaser.GameObjects.Rectangle;
+        (hitBody.body as Phaser.Physics.Arcade.Body).setSize(TILE, 8);
         break;
       }
     }
@@ -539,11 +559,34 @@ export class GameScene extends Phaser.Scene {
         break;
       }
       case 3: {
-        const tank = this.add.rectangle(px, py, TILE * 2, TILE, world.movementColor);
-        tank.setStrokeStyle(2, 0x333333);
+        const tankWidth = tileWidth;
+        const totalW = TILE * tankWidth;
+        const tankH = TILE;
+        const centerX = px + (tankWidth - 1) * TILE / 2;
+        const tankGfx = this.add.graphics();
+        tankGfx.fillStyle(world.movementColor, 1);
+        tankGfx.fillRect(centerX - totalW / 2, py - tankH / 2, totalW, tankH);
+        tankGfx.lineStyle(2, 0x333333, 1);
+        tankGfx.strokeRect(centerX - totalW / 2, py - tankH / 2, totalW, tankH);
+        tankGfx.fillStyle(0x4a2a10, 1);
+        tankGfx.fillRect(centerX - totalW / 2 + 2, py - tankH / 2 + 2, totalW - 4, 6);
+        const edgeColor = 0x3a1a08;
+        tankGfx.fillStyle(edgeColor, 1);
+        for (let i = 0; i < tankWidth; i++) {
+          const tx = centerX - totalW / 2 + i * TILE + 2;
+          tankGfx.fillRect(tx, py + tankH / 2 - 5, TILE - 4, 4);
+        }
+        const tank = this.add.rectangle(centerX, py, totalW, tankH, 0x000000, 0);
         this.movementGroup.add(tank);
-        (tank.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE * 2, TILE);
-        this.tankPushers.push({ rect: tank, dir: tileX % 2 === 0 ? 1 : -1 });
+        (tank.body as Phaser.Physics.Arcade.StaticBody).setSize(totalW, tankH);
+        this.tankPushers.push({
+          rect: tank,
+          dir: tileX % 2 === 0 ? 1 : -1,
+          leftBound: centerX - totalW / 2,
+          rightBound: centerX + totalW / 2,
+          topY: py - tankH / 2,
+          bottomY: py + tankH / 2,
+        });
         break;
       }
     }
@@ -593,6 +636,11 @@ export class GameScene extends Phaser.Scene {
       }
     } else if (this.quicksandContactTimer > 0) {
       this.player.body.setVelocityX(0);
+    } else if (this.insideTank) {
+      let moveX = 0;
+      if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
+      if (this.cursors.right.isDown) moveX += PHYSICS.MOVE_SPEED;
+      this.player.body.setVelocityX(moveX);
     } else {
       let moveX = 0;
       if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
@@ -664,7 +712,7 @@ export class GameScene extends Phaser.Scene {
         this.updateVineSwings(delta);
         break;
       case 3:
-        this.updateTankPush();
+        this.updateTankPush(delta);
         this.updateBullets(delta);
         break;
     }
@@ -1123,12 +1171,47 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private updateTankPush() {
-    const playerBounds = this.player.getBounds();
+  private updateTankPush(delta: number) {
+    if (this.tankExitCooldown > 0) {
+      this.tankExitCooldown -= delta;
+    }
+
+    if (this.insideTank) {
+      const t = this.insideTank;
+      const sinkY = t.topY + TILE * 0.6;
+      this.player.setY(sinkY);
+      this.player.body.setVelocityY(0);
+      this.player.body.setAllowGravity(false);
+      this.groundCollider.active = false;
+
+      const halfPlayer = TILE / 2;
+      if (this.player.x - halfPlayer < t.leftBound) {
+        this.player.setX(t.leftBound + halfPlayer);
+        this.player.body.setVelocityX(0);
+      }
+      if (this.player.x + halfPlayer > t.rightBound) {
+        this.player.setX(t.rightBound - halfPlayer);
+        this.player.body.setVelocityX(0);
+      }
+
+      if (this.cursors.jump.isDown) {
+        this.insideTank = null;
+        this.tankExitCooldown = 500;
+        this.player.body.setAllowGravity(true);
+        this.groundCollider.active = true;
+        this.player.setY(t.topY - PHYSICS.NORMAL_HEIGHT / 2 - 2);
+        this.player.body.setVelocityY(PHYSICS.JUMP_VELOCITY);
+      }
+      return;
+    }
+
+    if (this.tankExitCooldown > 0) return;
+
+    const playerX = this.player.x;
+    const playerBottom = this.player.y + PHYSICS.NORMAL_HEIGHT / 2;
     this.tankPushers.forEach((t) => {
-      const tankBounds = t.rect.getBounds();
-      if (Phaser.Geom.Rectangle.Overlaps(playerBounds, tankBounds)) {
-        this.player.body.setVelocityX(this.player.body.velocity.x + PHYSICS.TANK_SPEED * t.dir * 0.1);
+      if (playerX > t.leftBound && playerX < t.rightBound && playerBottom >= t.topY - 4 && playerBottom <= t.bottomY) {
+        this.insideTank = t;
       }
     });
   }
@@ -1139,12 +1222,29 @@ export class GameScene extends Phaser.Scene {
     if (this.bulletTimer > 3000) {
       this.bulletTimer = 0;
       const bx = this.player.x + 400;
-      const by = this.player.y - 20 + Math.random() * 40;
-      const bullet = this.add.rectangle(bx, by, 12, 4, 0xff0000);
-      this.bullets.add(bullet);
-      (bullet.body as Phaser.Physics.Arcade.Body).setVelocityX(-PHYSICS.BULLET_SPEED);
-      (bullet.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
-      this.time.delayedCall(5000, () => bullet.destroy());
+      const groundY = (LEVEL_HEIGHT - 2) * TILE;
+      const by = Math.min(this.player.y - 20 + Math.random() * 40, groundY - TILE / 2);
+      const bulletContainer = this.add.container(bx, by);
+      const bodyRect = this.add.rectangle(-1, 0, 10, 5, 0xdaa520);
+      bodyRect.setStrokeStyle(1, 0xb8860b);
+      const tip = this.add.triangle(-7, 0, 0, -2.5, 0, 2.5, -4, 0, 0xffd700);
+      const base = this.add.rectangle(5, 0, 2, 5, 0xb8860b);
+      bulletContainer.add([bodyRect, tip, base]);
+      const hitZone = this.add.rectangle(bx, by, 14, 5, 0x000000, 0);
+      this.bullets.add(hitZone);
+      (hitZone.body as Phaser.Physics.Arcade.Body).setVelocityX(-PHYSICS.BULLET_SPEED);
+      (hitZone.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      this.bulletVisuals.push({ hitZone, container: bulletContainer });
+      this.time.delayedCall(5000, () => {
+        hitZone.destroy();
+        bulletContainer.destroy();
+        this.bulletVisuals = this.bulletVisuals.filter(bv => bv.hitZone !== hitZone);
+      });
+    }
+    for (const bv of this.bulletVisuals) {
+      if (bv.hitZone.active) {
+        bv.container.setPosition(bv.hitZone.x, bv.hitZone.y);
+      }
     }
   }
 
