@@ -6,6 +6,7 @@ import { getSelectedColor, drawEyes } from "../PlayerConfig";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
 import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
 import type { ParallaxLayer } from "../worlds/JungleBackground";
+import { createBeachBackground, updateBeachParallax, type BeachParallaxLayer } from "../worlds/BeachBackground";
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -62,6 +63,7 @@ export class GameScene extends Phaser.Scene {
   private eyesGfx!: Phaser.GameObjects.Graphics;
   private lavaBackground: LavaBackgroundState | null = null;
   private jungleLayers: ParallaxLayer[] = [];
+  private beachLayers: BeachParallaxLayer[] = [];
 
   constructor() {
     super({ key: "GameScene" });
@@ -215,6 +217,9 @@ export class GameScene extends Phaser.Scene {
 
     if (this.worldIndex === 1) {
       this.oceanGfx = this.add.graphics().setDepth(55).setScrollFactor(0);
+      this.beachLayers = createBeachBackground(this);
+    } else {
+      this.beachLayers = [];
     }
 
     if (this.worldIndex === 2) {
@@ -690,6 +695,9 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.jungleLayers.length > 0) {
       updateJungleParallax(this.jungleLayers, this.cameras.main);
+    }
+    if (this.beachLayers.length > 0) {
+      updateBeachParallax(this.beachLayers, this.cameras.main);
     }
 
     if (this.vineGrabCooldown > 0) this.vineGrabCooldown -= delta;
