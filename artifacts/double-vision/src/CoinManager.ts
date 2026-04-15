@@ -1,3 +1,5 @@
+import { isLoggedIn, syncCoins } from "./AuthManager";
+
 const STORAGE_KEY = "double-vision-coins";
 
 let coinBalance = loadBalance();
@@ -17,6 +19,9 @@ function save(): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(coinBalance));
   } catch {}
+  if (isLoggedIn()) {
+    syncCoins(coinBalance);
+  }
 }
 
 export function getCoins(): number {
@@ -35,4 +40,11 @@ export function spendCoins(amount: number): boolean {
   coinBalance -= Math.floor(amount);
   save();
   return true;
+}
+
+export function loadServerData(serverCoins: number): void {
+  coinBalance = serverCoins;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(coinBalance));
+  } catch {}
 }

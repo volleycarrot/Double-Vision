@@ -78,7 +78,7 @@ export class StartScene extends Phaser.Scene {
     });
 
     const startGame = () => {
-      this.scene.start("ModeSelectScene");
+      this.scene.start("AuthScene");
     };
 
     btnBg.on("pointerdown", startGame);

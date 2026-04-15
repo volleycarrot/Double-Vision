@@ -7,6 +7,7 @@ import { getBindings, getKeyName, setBinding, resetBindings, isReservedKey, isAr
 import { getBgColor, getSettings, setMusicEnabled, setBgColorIndex, BG_PRESETS } from "../GameSettings";
 import { toggleMusic } from "../MusicManager";
 import { onlineManager } from "../OnlineMultiplayerManager";
+import { isLoggedIn, getUsername, logout } from "../AuthManager";
 
 export class TitleScene extends Phaser.Scene {
   private gameMode: GameMode = "multiplayer";
@@ -280,6 +281,29 @@ export class TitleScene extends Phaser.Scene {
 
     this.addSettingsButton(leftCenterX, height);
     this.addShopButton(leftCenterX, height);
+
+    const playerName = getUsername();
+    const nameLabel = this.add.text(16, height - 30, isLoggedIn() ? `Player: ${playerName}` : "Playing as Guest", {
+      fontSize: "12px",
+      fontFamily: "monospace",
+      color: "#888888",
+    });
+
+    if (isLoggedIn()) {
+      const logoutBtn = this.add.text(16, height - 14, "[Log Out]", {
+        fontSize: "11px",
+        fontFamily: "monospace",
+        color: "#e94560",
+      }).setInteractive({ useHandCursor: true });
+
+      logoutBtn.on("pointerover", () => logoutBtn.setColor("#ffffff"));
+      logoutBtn.on("pointerout", () => logoutBtn.setColor("#e94560"));
+      logoutBtn.on("pointerdown", () => {
+        if (this.settingsOpen) return;
+        logout();
+        this.scene.start("AuthScene");
+      });
+    }
 
     this.events.on("shutdown", () => {
       this.removeKeyListener();

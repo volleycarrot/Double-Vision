@@ -1,4 +1,5 @@
 import { WORLDS } from "./worlds/WorldConfig";
+import { isLoggedIn, syncProgress } from "./AuthManager";
 
 const STORAGE_KEY = "double-vision-progress";
 
@@ -45,6 +46,9 @@ export function markWorldCompleted(worldIndex: number, deaths: number): void {
     progress.worlds[worldIndex].deaths += deaths;
   }
   saveProgress(progress);
+  if (isLoggedIn()) {
+    syncProgress(worldIndex, true, progress.worlds[worldIndex]?.deaths ?? deaths);
+  }
 }
 
 export function isWorldCompleted(worldIndex: number): boolean {
@@ -55,4 +59,15 @@ export function isWorldCompleted(worldIndex: number): boolean {
 export function allWorldsCompleted(): boolean {
   const progress = loadProgress();
   return progress.worlds.every((w) => w.completed);
+}
+
+export function loadServerData(serverProgress: Array<{ worldIndex: number; completed: boolean; deaths: number }>): void {
+  const progress = defaultProgress();
+  for (const sp of serverProgress) {
+    if (sp.worldIndex >= 0 && sp.worldIndex < progress.worlds.length) {
+      progress.worlds[sp.worldIndex].completed = sp.completed;
+      progress.worlds[sp.worldIndex].deaths = sp.deaths;
+    }
+  }
+  saveProgress(progress);
 }

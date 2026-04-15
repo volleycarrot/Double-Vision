@@ -26,8 +26,12 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - 5 checkpoints per level, death respawn at last checkpoint
 - Title screen has a world gallery on the right with completion indicators
 - Pause menu (ESC or P) with Unpause, Restart, Home buttons
-- Progress (completion, best deaths) persisted to localStorage
-- Coins scattered through levels, collected on touch, tracked in localStorage
+- User accounts with login/register (bcryptjs password hashing, JWT tokens)
+- Guest mode: skip login, data stays in localStorage only
+- Logged-in users: coins, progress, and accessories synced to server via API
+- Auth screen appears after "Start Game" with Log In, Create Account, Play as Guest
+- Progress (completion, best deaths) persisted to localStorage (+ server for logged-in users)
+- Coins scattered through levels, collected on touch, tracked in localStorage (+ server for logged-in users)
 - Accessory shop (13 items across 4 categories: hats, glasses, capes, neckwear) - buy with coins, equip/remove
 - Equipped accessories drawn on player character in-game
 - Completing a world returns to title; completing all 4 shows WinScene
@@ -59,9 +63,11 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - `src/KeyBindings.ts` - Key binding configuration module with localStorage persistence
 - `src/GameSettings.ts` - Settings persistence (music, background color)
 - `src/MusicManager.ts` - Procedural music via Web Audio API
-- `src/CoinManager.ts` - Coin balance persistence in localStorage
-- `src/AccessoryManager.ts` - Accessory definitions, ownership, equip state, and drawing logic
-- `src/ProgressManager.ts` - localStorage progress read/write (completion, deaths)
+- `src/AuthManager.ts` - Client-side auth state (JWT token, username, API helpers for login/register/sync)
+- `src/CoinManager.ts` - Coin balance persistence in localStorage + server sync for logged-in users
+- `src/AccessoryManager.ts` - Accessory definitions, ownership, equip state, drawing logic + server sync
+- `src/ProgressManager.ts` - Progress read/write (localStorage + server sync for logged-in users)
+- `src/scenes/AuthScene.ts` - Auth screen with Log In, Create Account, Play as Guest (HTML input overlays)
 - `src/OnlineMultiplayerManager.ts` - WebSocket client singleton for online co-op room management and input relay
 - `src/scenes/ModeSelectScene.ts` - Mode select with Single Player, Local Co-op, Online Co-op
 - `src/scenes/LobbyScene.ts` - Online co-op lobby (Create Room / Join Room)
@@ -78,6 +84,22 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - Vite (dev server and bundling)
 
 ## API Server (artifacts/api-server)
+
+### Auth & User Data API
+- POST `/api/auth/register` - Create account (username + password, bcryptjs hash)
+- POST `/api/auth/login` - Log in, returns JWT token
+- GET `/api/auth/me` - Get current user from token
+- GET `/api/user/data` - Get coins, progress, accessories for logged-in user
+- POST `/api/user/coins` - Update coin balance
+- POST `/api/user/progress` - Update world progress
+- POST `/api/user/accessories` - Update owned/equipped accessories
+- Auth middleware extracts user from Bearer token in Authorization header
+- Dependencies: bcryptjs, jsonwebtoken
+
+### Database Schema
+- `users` table: id, username, password_hash, coins, created_at, updated_at
+- `user_progress` table: id, user_id, world_index, completed, deaths (unique on user_id + world_index)
+- `user_accessories` table: id, user_id, accessory_id, equipped (unique on user_id + accessory_id)
 
 ### WebSocket Room Management
 - WebSocket server attached to HTTP server at `/api/ws`

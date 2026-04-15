@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { StartScene } from "./scenes/StartScene";
+import { AuthScene } from "./scenes/AuthScene";
 import { ModeSelectScene } from "./scenes/ModeSelectScene";
 import { LobbyScene } from "./scenes/LobbyScene";
 import { TitleScene } from "./scenes/TitleScene";
@@ -30,6 +31,7 @@ const config: Phaser.Types.Core.GameConfig = {
   dom: { createContainer: true },
   scene: [
     StartScene,
+    AuthScene,
     ModeSelectScene,
     LobbyScene,
     TitleScene,

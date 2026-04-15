@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { EYE, getEyeOffsetY } from "./PlayerConfig";
+import { isLoggedIn, syncAccessories } from "./AuthManager";
 
 const STORAGE_KEY = "double-vision-accessories";
 
@@ -123,6 +124,14 @@ function save(): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {}
+  if (isLoggedIn()) {
+    const equippedMap: Record<string, boolean> = {};
+    for (const cat of ["hat", "glasses", "cape", "neckwear"]) {
+      const id = state.equipped[cat];
+      if (id) equippedMap[id] = true;
+    }
+    syncAccessories(state.owned, equippedMap);
+  }
 }
 
 export function isOwned(id: string): boolean {
@@ -162,6 +171,23 @@ export function getEquippedAccessories(): Accessory[] {
     }
   }
   return result;
+}
+
+export function loadServerData(serverAccessories: Array<{ accessoryId: string; equipped: boolean }>): void {
+  const newState = defaultState();
+  for (const sa of serverAccessories) {
+    newState.owned.push(sa.accessoryId);
+    if (sa.equipped) {
+      const acc = ACCESSORIES.find(a => a.id === sa.accessoryId);
+      if (acc) {
+        newState.equipped[acc.category] = sa.accessoryId;
+      }
+    }
+  }
+  state = newState;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
 }
 
 export function drawSingleAccessory(
