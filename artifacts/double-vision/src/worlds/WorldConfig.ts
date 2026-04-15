@@ -10,6 +10,8 @@ export interface WorldConfig {
   movementName: string;
   movementColor: number;
   checkpointColor: number;
+  secretColor: number;
+  secretAccent: number;
 }
 
 export const WORLDS: WorldConfig[] = [
@@ -25,6 +27,8 @@ export const WORLDS: WorldConfig[] = [
     movementName: "Landslide",
     movementColor: 0x6b4226,
     checkpointColor: 0xffbb33,
+    secretColor: 0x3a1414,
+    secretAccent: 0x5a2a1a,
   },
   {
     name: "Beach World",
@@ -38,6 +42,8 @@ export const WORLDS: WorldConfig[] = [
     movementName: "Wave",
     movementColor: 0x0099cc,
     checkpointColor: 0xffdd00,
+    secretColor: 0xc8a882,
+    secretAccent: 0xb09870,
   },
   {
     name: "Jungle World",
@@ -51,6 +57,8 @@ export const WORLDS: WorldConfig[] = [
     movementName: "Vine",
     movementColor: 0x228b22,
     checkpointColor: 0x00ff88,
+    secretColor: 0x334e24,
+    secretAccent: 0x3a5528,
   },
   {
     name: "War Zone",
@@ -64,6 +72,8 @@ export const WORLDS: WorldConfig[] = [
     movementName: "Trench",
     movementColor: 0x6b4226,
     checkpointColor: 0xffcc00,
+    secretColor: 0x363636,
+    secretAccent: 0x444444,
   },
 ];
 

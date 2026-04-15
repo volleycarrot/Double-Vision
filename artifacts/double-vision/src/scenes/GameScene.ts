@@ -87,6 +87,9 @@ export class GameScene extends Phaser.Scene {
   private disconnectOverlay: Phaser.GameObjects.Container | null = null;
   private onlineRoleText: Phaser.GameObjects.Text | null = null;
   private touchControls: TouchControls | null = null;
+  private secretGroup!: Phaser.Physics.Arcade.StaticGroup;
+  private secretAreas: { hitZone: Phaser.GameObjects.Rectangle; gfx: Phaser.GameObjects.Graphics; shimmerGfx: Phaser.GameObjects.Graphics; collected: boolean; cx: number; cy: number; w: number; h: number }[] = [];
+  private secretShimmerTimer: number = 0;
 
   constructor() {
     super({ key: "GameScene" });
@@ -143,6 +146,8 @@ export class GameScene extends Phaser.Scene {
     this.bulletVisuals = [];
     this.coinGfxMap = new Map();
     this.coinsCollected = 0;
+    this.secretAreas = [];
+    this.secretShimmerTimer = 0;
     if (this.lavaBackground) {
       destroyLavaBackground(this.lavaBackground, this);
       this.lavaBackground = null;
@@ -163,6 +168,7 @@ export class GameScene extends Phaser.Scene {
     this.spikeGroup = this.physics.add.group({ allowGravity: false });
     this.movementGroup = this.physics.add.staticGroup();
     this.caveGroup = this.physics.add.staticGroup();
+    this.secretGroup = this.physics.add.staticGroup();
 
     const levelTiles = generateLevel(this.worldIndex, this.levelSeed);
     this.buildLevel(levelTiles, world);
@@ -383,6 +389,17 @@ export class GameScene extends Phaser.Scene {
       fontFamily: "monospace",
       color: "#ffdd44",
     }).setScrollFactor(0).setOrigin(1, 0).setDepth(100);
+
+    this.physics.add.overlap(this.player, this.secretGroup, (_p, secretHit) => {
+      const zone = secretHit as Phaser.GameObjects.Rectangle;
+      const area = this.secretAreas.find(s => s.hitZone === zone);
+      if (!area || area.collected) return;
+      area.collected = true;
+      addCoins(5);
+      this.coinsCollected += 5;
+      this.coinText.setText(`Coins: ${getCoins()}`);
+      this.showSecretReward(area.cx, area.cy);
+    }, undefined, this);
 
     this.accessoryGfx = this.add.graphics().setDepth(11);
   }
@@ -699,6 +716,64 @@ export class GameScene extends Phaser.Scene {
             );
           }
 
+          break;
+        }
+        case "secret": {
+          const secretWidth = tile.width ?? 2;
+          const totalW = TILE * secretWidth;
+          const groundSurface = (LEVEL_HEIGHT - 2) * TILE;
+          const isUnderground = tile.y === LEVEL_HEIGHT - 2;
+          const totalH = isUnderground ? TILE * 2 : TILE * 2;
+          const centerX = px + (secretWidth - 1) * TILE / 2;
+          const centerY = isUnderground
+            ? groundSurface + TILE / 2 + TILE
+            : py + TILE / 2;
+          const left = centerX - totalW / 2;
+          const top = centerY - totalH / 2;
+
+          const secretGfx = this.add.graphics().setDepth(isUnderground ? -1 : 1);
+          const detailSeed = (tile.x * 59 + tile.y * 131) % 1000;
+          const detailRng = (i: number) => ((detailSeed + i * 283) % 1000) / 1000;
+
+          if (isUnderground) {
+            const pitTop = groundSurface;
+            const pitBottom = pitTop + TILE * 2;
+            const pitH = pitBottom - pitTop;
+
+            secretGfx.fillStyle(world.groundColor, 1);
+            secretGfx.fillRect(left, pitTop, totalW, pitH);
+            secretGfx.fillStyle(world.secretColor, 0.6);
+            secretGfx.fillRect(left, pitTop, totalW, pitH);
+            for (let i = 0; i < 4 * secretWidth; i++) {
+              const rx = left + 2 + detailRng(i) * (totalW - 4);
+              const ry = pitTop + 2 + detailRng(i + 10) * (pitH - 4);
+              const rs = 1 + detailRng(i + 20) * 1.5;
+              secretGfx.fillStyle(world.groundColor, 0.3 + detailRng(i + 30) * 0.15);
+              secretGfx.fillCircle(rx, ry, rs);
+            }
+            secretGfx.fillStyle(world.groundColor, 0.5);
+            secretGfx.fillRect(left, pitBottom - 2, totalW, 2);
+          } else {
+            secretGfx.fillStyle(world.platformColor, 0.85);
+            secretGfx.fillRect(left, top, totalW, totalH);
+            secretGfx.fillStyle(world.secretColor, 0.4);
+            secretGfx.fillRect(left, top, totalW, totalH);
+            for (let i = 0; i < 3 * secretWidth; i++) {
+              const rx = left + 2 + detailRng(i) * (totalW - 4);
+              const ry = top + 2 + detailRng(i + 10) * (totalH - 4);
+              const rs = 1 + detailRng(i + 20) * 1.5;
+              secretGfx.fillStyle(world.platformColor, 0.25 + detailRng(i + 30) * 0.1);
+              secretGfx.fillCircle(rx, ry, rs);
+            }
+          }
+
+          const shimmerGfx = this.add.graphics().setDepth(isUnderground ? 0 : 2);
+
+          const hitZone = this.add.rectangle(centerX, centerY, totalW - 4, totalH - 4, 0x000000, 0);
+          this.secretGroup.add(hitZone);
+          (hitZone.body as Phaser.Physics.Arcade.StaticBody).setSize(totalW - 4, totalH - 4);
+
+          this.secretAreas.push({ hitZone, gfx: secretGfx, shimmerGfx, collected: false, cx: centerX, cy: centerY, w: totalW, h: totalH });
           break;
         }
         case "checkpoint": {
@@ -1133,6 +1208,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.updateWorldMechanics(delta, inputs);
+    this.updateSecretShimmer(delta);
     this.checkCheckpoints();
 
     const currentHeight = this.isDucking ? PHYSICS.DUCK_HEIGHT : PHYSICS.NORMAL_HEIGHT;
@@ -1834,6 +1910,87 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.pause();
     }
+  }
+
+  private updateSecretShimmer(delta: number) {
+    this.secretShimmerTimer += delta;
+    const world = WORLDS[this.worldIndex];
+    for (const area of this.secretAreas) {
+      area.shimmerGfx.clear();
+      if (area.collected) continue;
+      const t = this.secretShimmerTimer * 0.0012;
+      const phase = t;
+      const visible = Math.sin(phase * 1.7) > 0.6;
+      if (visible) {
+        const sparkAlpha = 0.08 + Math.sin(phase * 2.3) * 0.06;
+        const sx = area.cx + Math.cos(phase * 0.7) * (area.w * 0.2);
+        const sy = area.cy + Math.sin(phase * 0.5) * (area.h * 0.15);
+        area.shimmerGfx.fillStyle(world.secretAccent, sparkAlpha);
+        area.shimmerGfx.fillCircle(sx, sy, 1 + Math.sin(phase) * 0.4);
+      }
+    }
+  }
+
+  private showSecretReward(cx: number, cy: number) {
+    const world = WORLDS[this.worldIndex];
+
+    const rewardText = this.add.text(cx, cy - 10, "+5", {
+      fontSize: "20px",
+      fontFamily: "monospace",
+      fontStyle: "bold",
+      color: "#ffdd00",
+      stroke: "#000000",
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(200);
+
+    this.tweens.add({
+      targets: rewardText,
+      y: cy - 50,
+      alpha: 0,
+      duration: 1200,
+      ease: "Power2",
+      onComplete: () => rewardText.destroy(),
+    });
+
+    const sparkleGfx = this.add.graphics().setDepth(199);
+    const sparkles: { x: number; y: number; vx: number; vy: number; life: number; size: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      sparkles.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * (40 + Math.random() * 30),
+        vy: Math.sin(angle) * (40 + Math.random() * 30) - 20,
+        life: 600 + Math.random() * 400,
+        size: 2 + Math.random() * 2,
+      });
+    }
+
+    let elapsed = 0;
+    const sparkleEvent = this.time.addEvent({
+      delay: 16,
+      repeat: 60,
+      callback: () => {
+        elapsed += 16;
+        sparkleGfx.clear();
+        for (const s of sparkles) {
+          const progress = Math.min(elapsed / s.life, 1);
+          if (progress >= 1) continue;
+          s.x += s.vx * 0.016;
+          s.y += s.vy * 0.016;
+          s.vy += 60 * 0.016;
+          const alpha = 1 - progress;
+          sparkleGfx.fillStyle(world.secretAccent, alpha);
+          sparkleGfx.fillCircle(s.x, s.y, s.size * (1 - progress * 0.5));
+          sparkleGfx.fillStyle(0xffdd00, alpha * 0.8);
+          sparkleGfx.fillCircle(s.x, s.y, s.size * 0.5 * (1 - progress * 0.5));
+        }
+        if (elapsed >= 1000) {
+          sparkleGfx.destroy();
+          sparkleEvent.destroy();
+        }
+      },
+    });
   }
 
   private pause(fromRemote = false) {
