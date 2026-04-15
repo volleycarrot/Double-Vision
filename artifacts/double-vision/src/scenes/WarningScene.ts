@@ -23,7 +23,7 @@ export class WarningScene extends Phaser.Scene {
 
     homeBtn.on("pointerover", () => homeBtn.setColor("#ffffff"));
     homeBtn.on("pointerout", () => homeBtn.setColor("#cccccc"));
-    homeBtn.on("pointerdown", () => this.scene.start("StartScene"));
+    homeBtn.on("pointerdown", () => this.scene.start("TitleScene", { gameMode: data.gameMode }));
 
     const worldNum = this.add.text(width / 2, height * 0.15, `WORLD ${data.worldIndex + 1}`, {
       fontSize: "20px",

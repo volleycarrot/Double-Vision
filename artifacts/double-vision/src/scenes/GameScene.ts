@@ -1544,7 +1544,7 @@ export class GameScene extends Phaser.Scene {
       overlay.destroy();
       rewardText.destroy();
       if (allWorldsCompleted()) {
-        this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime });
+        this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime, gameMode: this.gameMode });
       } else {
         this.scene.start("TitleScene", { gameMode: this.gameMode });
       }
@@ -1703,6 +1703,6 @@ export class GameScene extends Phaser.Scene {
     this.isPaused = false;
     this.physics.world.resume();
     this.tweens.resumeAll();
-    this.scene.start("StartScene");
+    this.scene.start("TitleScene", { gameMode: this.gameMode });
   }
 }
