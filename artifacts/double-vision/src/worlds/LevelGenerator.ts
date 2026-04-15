@@ -337,8 +337,6 @@ export function generateLevel(worldIndex: number, seed?: number): LevelTile[] {
   const secretSpacing = Math.floor((LEVEL_WIDTH - 20) / (targetSecrets + 1));
   let secretsPlaced = 0;
 
-  const existingPlatforms = tiles.filter(t => t.type === "platform");
-
   const isNearOther = (col: number) => {
     return tiles.some(t => t.type === "checkpoint" && Math.abs(t.x - col) <= 5) ||
            tiles.some(t => t.type === "cave" && Math.abs(t.x - col) <= 6) ||
@@ -348,123 +346,45 @@ export function generateLevel(worldIndex: number, seed?: number): LevelTile[] {
   for (let si = 0; si < targetSecrets && secretsPlaced < 2; si++) {
     const baseCol = 10 + (si + 1) * secretSpacing + Math.floor((secretRand() - 0.5) * 8);
     const secretWidth = 2;
-    const placementType = secretRand();
 
-    if (placementType < 0.55) {
-      let bestCol = -1;
-      for (let offset = 0; offset < 20; offset++) {
-        const tryCol = baseCol + (offset % 2 === 0 ? offset / 2 : -Math.ceil(offset / 2));
-        if (tryCol < 8 || tryCol + secretWidth >= LEVEL_WIDTH - 5) continue;
-        if (isNearOther(tryCol)) continue;
-        let canPlace = true;
-        for (let dx = 0; dx < secretWidth; dx++) {
-          const col = tryCol + dx;
-          if (hazardOccupied.has(col) || noGroundColumns.has(col)) {
-            canPlace = false;
-            break;
-          }
-        }
-        if (canPlace) {
-          bestCol = tryCol;
+    let bestCol = -1;
+    for (let offset = 0; offset < 40; offset++) {
+      const tryCol = baseCol + (offset % 2 === 0 ? offset / 2 : -Math.ceil(offset / 2));
+      if (tryCol < 8 || tryCol + secretWidth >= LEVEL_WIDTH - 5) continue;
+      if (isNearOther(tryCol)) continue;
+      let canPlace = true;
+      for (let dx = 0; dx < secretWidth; dx++) {
+        const col = tryCol + dx;
+        if (hazardOccupied.has(col) || noGroundColumns.has(col)) {
+          canPlace = false;
           break;
         }
       }
-      if (bestCol >= 0) {
-        tiles.push({ x: bestCol, y: groundLevel, type: "secret", width: secretWidth });
-        for (let dx = 0; dx < secretWidth; dx++) {
-          hazardOccupied.add(bestCol + dx);
-          for (let i = tiles.length - 1; i >= 0; i--) {
-            const t = tiles[i];
-            if (t.x === bestCol + dx && t.y === groundLevel && t.type === "ground") {
-              tiles.splice(i, 1);
-            }
-          }
-        }
-        for (const wallCol of [bestCol - 1, bestCol + secretWidth]) {
-          if (wallCol >= 0 && wallCol < LEVEL_WIDTH) {
-            const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === wallCol);
-            if (!hasGround && !noGroundColumns.has(wallCol)) {
-              tiles.push({ x: wallCol, y: groundLevel, type: "ground" });
-            }
-          }
-        }
-        secretsPlaced++;
-        continue;
+      if (canPlace) {
+        bestCol = tryCol;
+        break;
       }
     }
-
-    {
-      let bestPlat: LevelTile | null = null;
-      let bestDist = Infinity;
-      for (const plat of existingPlatforms) {
-        const dist = Math.abs(plat.x - baseCol);
-        if (dist >= bestDist || dist >= 25) continue;
-        if (isNearOther(plat.x)) continue;
-        const adjPlatforms = existingPlatforms.filter(p =>
-          p.y === plat.y && Math.abs(p.x - plat.x) <= 1
-        );
-        if (adjPlatforms.length < 2) continue;
-        const belowY = plat.y + 1;
-        if (belowY >= groundLevel - 1) continue;
-        let clearBelow = true;
-        for (let dx = 0; dx < secretWidth; dx++) {
-          const col = plat.x + dx;
-          if (col >= LEVEL_WIDTH - 5) {
-            clearBelow = false;
-            break;
+    if (bestCol >= 0) {
+      tiles.push({ x: bestCol, y: groundLevel, type: "secret", width: secretWidth });
+      for (let dx = 0; dx < secretWidth; dx++) {
+        hazardOccupied.add(bestCol + dx);
+        for (let i = tiles.length - 1; i >= 0; i--) {
+          const t = tiles[i];
+          if (t.x === bestCol + dx && t.y === groundLevel && t.type === "ground") {
+            tiles.splice(i, 1);
           }
         }
-        if (clearBelow) {
-          bestPlat = plat;
-          bestDist = dist;
-        }
       }
-      if (bestPlat) {
-        tiles.push({ x: bestPlat.x, y: bestPlat.y + 1, type: "secret", width: secretWidth });
-        for (let dx = 0; dx < secretWidth; dx++) hazardOccupied.add(bestPlat.x + dx);
-        secretsPlaced++;
-        continue;
-      }
-
-      let bestCol = -1;
-      for (let offset = 0; offset < 20; offset++) {
-        const tryCol = baseCol + (offset % 2 === 0 ? offset / 2 : -Math.ceil(offset / 2));
-        if (tryCol < 8 || tryCol + secretWidth >= LEVEL_WIDTH - 5) continue;
-        if (isNearOther(tryCol)) continue;
-        let canPlace = true;
-        for (let dx = 0; dx < secretWidth; dx++) {
-          const col = tryCol + dx;
-          if (hazardOccupied.has(col) || noGroundColumns.has(col)) {
-            canPlace = false;
-            break;
+      for (const wallCol of [bestCol - 1, bestCol + secretWidth]) {
+        if (wallCol >= 0 && wallCol < LEVEL_WIDTH) {
+          const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === wallCol);
+          if (!hasGround && !noGroundColumns.has(wallCol)) {
+            tiles.push({ x: wallCol, y: groundLevel, type: "ground" });
           }
         }
-        if (canPlace) {
-          bestCol = tryCol;
-          break;
-        }
       }
-      if (bestCol >= 0) {
-        tiles.push({ x: bestCol, y: groundLevel, type: "secret", width: secretWidth });
-        for (let dx = 0; dx < secretWidth; dx++) {
-          hazardOccupied.add(bestCol + dx);
-          for (let i = tiles.length - 1; i >= 0; i--) {
-            const t = tiles[i];
-            if (t.x === bestCol + dx && t.y === groundLevel && t.type === "ground") {
-              tiles.splice(i, 1);
-            }
-          }
-        }
-        for (const wallCol of [bestCol - 1, bestCol + secretWidth]) {
-          if (wallCol >= 0 && wallCol < LEVEL_WIDTH) {
-            const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === wallCol);
-            if (!hasGround && !noGroundColumns.has(wallCol)) {
-              tiles.push({ x: wallCol, y: groundLevel, type: "ground" });
-            }
-          }
-        }
-        secretsPlaced++;
-      }
+      secretsPlaced++;
     }
   }
 
