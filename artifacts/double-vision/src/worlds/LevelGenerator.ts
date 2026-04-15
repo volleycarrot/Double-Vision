@@ -349,6 +349,30 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
   }
 
+  const LOW_PLATFORM_THRESHOLD = 4;
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (t.type !== "platform") continue;
+    const heightAboveGround = groundLevel - t.y;
+    if (heightAboveGround >= LOW_PLATFORM_THRESHOLD) continue;
+    const platStart = t.x;
+    const platEnd = t.x + (t.width ?? 1) - 1;
+    let overlapsObstacle = false;
+    for (const obs of tiles) {
+      if (obs.type !== "kill" && obs.type !== "spike") continue;
+      const obsStart = obs.x - 1;
+      const obsEnd = obs.x + (obs.width ?? 1);
+      if (platEnd < obsStart || platStart > obsEnd) continue;
+      if (obs.y > t.y) {
+        overlapsObstacle = true;
+        break;
+      }
+    }
+    if (overlapsObstacle) {
+      tiles.splice(i, 1);
+    }
+  }
+
   const MIN_PLATFORM_CLEARANCE = 3;
   for (let i = tiles.length - 1; i >= 0; i--) {
     const t = tiles[i];
