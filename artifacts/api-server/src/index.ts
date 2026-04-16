@@ -38,8 +38,20 @@ const shutdown = (signal: string) => {
   const forceExit = setTimeout(() => {
     logger.warn("Force exiting after shutdown timeout");
     process.exit(0);
-  }, 5000);
+  }, 1500);
   forceExit.unref();
+  // Force-close any keep-alive HTTP and WebSocket connections so the port
+  // is released promptly. Without this, server.close() waits for clients
+  // (e.g. open WS connections) to disconnect, which can hold the port long
+  // enough that a workflow restart races into EADDRINUSE.
+  try {
+    (server as unknown as { closeAllConnections?: () => void })
+      .closeAllConnections?.();
+    (server as unknown as { closeIdleConnections?: () => void })
+      .closeIdleConnections?.();
+  } catch (err) {
+    logger.warn({ err }, "Error closing connections during shutdown");
+  }
   server.close(() => {
     clearTimeout(forceExit);
     process.exit(0);

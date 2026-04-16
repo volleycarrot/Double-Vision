@@ -582,19 +582,30 @@ export class MapEditorScene extends Phaser.Scene {
 
     const parseError = async (res: Response): Promise<string> => {
       const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
+      const isJson = contentType.includes("application/json");
+      let serverError: string | null = null;
+      if (isJson) {
         try {
           const data = await res.json();
-          if (data && typeof data.error === "string") return data.error;
+          if (data && typeof data.error === "string") serverError = data.error;
         } catch {
-          // fall through to status-based message
+          // not parseable JSON despite header; treat as non-JSON
         }
       }
       if (res.status === 413) return "Map too large to save";
       if (res.status === 401 || res.status === 403) return "Log in to save";
-      if (res.status === 404) return "Map not found";
       if (res.status === 429) return "Too many requests, try again";
       if (res.status >= 500 && res.status < 600) return "Server unavailable";
+      if (res.status === 404) {
+        // Only surface "Map not found" when the server actually returned a
+        // JSON 404 referencing this map (i.e. PUT to a stale id). A bare 404
+        // (no JSON body, e.g. proxy fallback when API is down, or a POST 404)
+        // means the request never reached the maps route — show a generic
+        // failure instead of misleading "Map not found".
+        if (isJson && this.mapId !== null && serverError) return serverError;
+        return "Server unavailable";
+      }
+      if (serverError) return serverError;
       return "Save failed, try again";
     };
 
