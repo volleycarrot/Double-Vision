@@ -91,6 +91,7 @@ export class GameScene extends Phaser.Scene {
   private secretGroup!: Phaser.Physics.Arcade.StaticGroup;
   private secretAreas: { hitZone: Phaser.GameObjects.Rectangle; gfx: Phaser.GameObjects.Graphics; shimmerGfx: Phaser.GameObjects.Graphics; collected: boolean; cx: number; cy: number; w: number; h: number }[] = [];
   private secretShimmerTimer: number = 0;
+  private finishTiles: { left: number; right: number; top: number; bottom: number }[] = [];
 
   constructor() {
     super({ key: "GameScene" });
@@ -160,6 +161,7 @@ export class GameScene extends Phaser.Scene {
     this.coinsCollected = 0;
     this.secretAreas = [];
     this.secretShimmerTimer = 0;
+    this.finishTiles = [];
     if (this.lavaBackground) {
       destroyLavaBackground(this.lavaBackground, this);
       this.lavaBackground = null;
@@ -519,7 +521,7 @@ export class GameScene extends Phaser.Scene {
   private buildLevel(tiles: LevelTile[], world: typeof WORLDS[0]) {
     const checkpointSpacing = Math.floor(LEVEL_WIDTH / (CHECKPOINT_COUNT + 1));
 
-    const perCellTypes = new Set<string>(["ground", "platform", "kill", "spike", "checkpoint"]);
+    const perCellTypes = new Set<string>(["ground", "platform", "kill", "spike", "checkpoint", "finish"]);
     const expandedTiles: LevelTile[] = [];
     for (const tile of tiles) {
       const w = tile.width ?? 1;
@@ -884,6 +886,33 @@ export class GameScene extends Phaser.Scene {
           const flag = this.add.triangle(6, -4, 0, 0, 0, 16, 16, 8, world.checkpointColor);
           container.add([pole, flag]);
           this.checkpoints.push({ x: px, y: flagY, reached: false, marker: container });
+          break;
+        }
+        case "finish": {
+          if (!this.customTiles) break;
+          const tileW = (tile.width ?? 1) * TILE;
+          const finLeft = tile.x * TILE;
+          const finTop = tile.y * TILE;
+          const container = this.add.container(px, py);
+          const pole = this.add.rectangle(0, 10, 4, 52, 0xdddddd);
+          const flagGfx = this.add.graphics();
+          const cellSize = 6;
+          const cols = 5;
+          const rows = 4;
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const isWhite = (r + c) % 2 === 0;
+              flagGfx.fillStyle(isWhite ? 0xffffff : 0x111111, 1);
+              flagGfx.fillRect(2 + c * cellSize, -14 + r * cellSize, cellSize, cellSize);
+            }
+          }
+          container.add([pole, flagGfx]);
+          this.finishTiles.push({
+            left: finLeft,
+            right: finLeft + tileW,
+            top: finTop,
+            bottom: finTop + TILE,
+          });
           break;
         }
       }
@@ -1370,7 +1399,19 @@ export class GameScene extends Phaser.Scene {
     this.accessoryGfx.clear();
     drawAccessories(this.accessoryGfx, this.player.x, this.player.y, 28, currentHeight, getSelectedColor().fill);
 
-    if (this.player.x > (this.customLevelEnd - 3) * TILE) {
+    if (this.customTiles && this.finishTiles.length > 0) {
+      const pH = this.isDucking ? PHYSICS.DUCK_HEIGHT : PHYSICS.NORMAL_HEIGHT;
+      const pLeft = this.player.body.x;
+      const pRight = pLeft + 28;
+      const pTop = this.player.body.y;
+      const pBottom = pTop + pH;
+      for (const ft of this.finishTiles) {
+        if (pLeft < ft.right && pRight > ft.left && pTop < ft.bottom && pBottom > ft.top) {
+          this.completeWorld();
+          break;
+        }
+      }
+    } else if (this.player.x > (this.customLevelEnd - 3) * TILE) {
       this.completeWorld();
     }
 

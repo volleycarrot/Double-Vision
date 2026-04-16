@@ -27,6 +27,7 @@ const PALETTE: PaletteTile[] = [
   { type: "movement", label: "Belt→", color: 0x6b4226, dir: "right" },
   { type: "movement", label: "Belt←", color: 0x6b4226, dir: "left" },
   { type: "checkpoint", label: "Flag", color: 0xffcc00 },
+  { type: "finish", label: "Finish", color: 0x222222 },
 ];
 
 const ERASER = "eraser" as const;
@@ -233,6 +234,7 @@ export class MapEditorScene extends Phaser.Scene {
       checkpoint: 0xffcc00,
       cave: 0x222222,
       secret: 0x444488,
+      finish: 0x222222,
     };
 
     for (const [key, val] of this.grid.entries()) {
@@ -282,6 +284,19 @@ export class MapEditorScene extends Phaser.Scene {
           this.tileGraphics.fillTriangle(cx + 5, cy - 5, cx + 5, cy + 5, cx - 5, cy);
         } else {
           this.tileGraphics.fillTriangle(cx - 5, cy - 5, cx - 5, cy + 5, cx + 5, cy);
+        }
+      } else if (type === "finish") {
+        this.tileGraphics.fillStyle(0xcccccc, 1);
+        this.tileGraphics.fillRect(x + TILE / 2 - 2, y + 2, 3, TILE - 4);
+        const cellSize = 4;
+        const cols = 4;
+        const rows = 3;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const isWhite = (r + c) % 2 === 0;
+            this.tileGraphics.fillStyle(isWhite ? 0xffffff : 0x111111, 1);
+            this.tileGraphics.fillRect(x + TILE / 2 + 1 + c * cellSize, y + 4 + r * cellSize, cellSize, cellSize);
+          }
         }
       }
     }
@@ -357,6 +372,20 @@ export class MapEditorScene extends Phaser.Scene {
           g.fillTriangle(bx + 7, by - 7, bx + 7, by + 7, bx - 7, by);
         } else {
           g.fillTriangle(bx - 7, by - 7, bx - 7, by + 7, bx + 7, by);
+        }
+      } else if (item.type === "finish") {
+        const g = this.add.graphics().setDepth(13);
+        g.fillStyle(0xcccccc, 1);
+        g.fillRect(bx - 11, by - 11, 3, 22);
+        const cellSize = 4;
+        const cols = 4;
+        const rows = 3;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const isWhite = (r + c) % 2 === 0;
+            g.fillStyle(isWhite ? 0xffffff : 0x000000, 1);
+            g.fillRect(bx - 8 + c * cellSize, by - 11 + r * cellSize, cellSize, cellSize);
+          }
         }
       }
 

@@ -3,7 +3,7 @@ import { db, customMapsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { authRequired } from "../middleware/auth";
 
-const VALID_TILE_TYPES = new Set(["ground", "platform", "kill", "spike", "movement", "checkpoint", "cave", "secret"]);
+const VALID_TILE_TYPES = new Set(["ground", "platform", "kill", "spike", "movement", "checkpoint", "cave", "secret", "finish"]);
 const VALID_DIRS = new Set(["up", "down", "left", "right"]);
 const MAX_TILES = 5000;
 
