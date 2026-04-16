@@ -29,3 +29,22 @@ server.on("error", (err) => {
   logger.error({ err }, "Error listening on port");
   process.exit(1);
 });
+
+let shuttingDown = false;
+const shutdown = (signal: string) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, "Shutting down server");
+  const forceExit = setTimeout(() => {
+    logger.warn("Force exiting after shutdown timeout");
+    process.exit(0);
+  }, 5000);
+  forceExit.unref();
+  server.close(() => {
+    clearTimeout(forceExit);
+    process.exit(0);
+  });
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

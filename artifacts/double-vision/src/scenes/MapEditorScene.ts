@@ -577,14 +577,21 @@ export class MapEditorScene extends Phaser.Scene {
     if (this.saveStatus) this.saveStatus.setText("Saving...").setColor("#ffcc00");
 
     const parseError = async (res: Response): Promise<string> => {
-      try {
-        const data = await res.json();
-        if (data && typeof data.error === "string") return data.error;
-      } catch {
-        // not JSON
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        try {
+          const data = await res.json();
+          if (data && typeof data.error === "string") return data.error;
+        } catch {
+          // fall through to status-based message
+        }
       }
       if (res.status === 413) return "Map too large to save";
-      return "Error";
+      if (res.status === 401 || res.status === 403) return "Log in to save";
+      if (res.status === 404) return "Map not found";
+      if (res.status === 429) return "Too many requests, try again";
+      if (res.status >= 500 && res.status < 600) return "Server unavailable";
+      return "Save failed, try again";
     };
 
     try {
