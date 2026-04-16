@@ -33,10 +33,10 @@ export function getSelectedColorIndex(): number {
 }
 
 export const EYE = {
-  WIDTH: 4,
-  HEIGHT: 5,
-  SPACING: 6,
-  VERTICAL_RATIO: 0.28,
+  WIDTH: 6,
+  HEIGHT: 8,
+  SPACING: 8,
+  VERTICAL_RATIO: 0.3,
 };
 
 export function getEyeOffsetY(bodyHeight: number): number {

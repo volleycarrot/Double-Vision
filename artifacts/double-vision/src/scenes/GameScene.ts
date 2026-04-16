@@ -2,7 +2,16 @@ import Phaser from "phaser";
 import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } from "../worlds/WorldConfig";
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
 import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
+import { recordDeath, recordLevelCompletion } from "../StatsManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
+import { drawAccessories } from "../AccessoryManager";
+import { getCoins, addCoins } from "../CoinManager";
+import type { GameMode } from "./ModeSelectScene";
+import { getBindings } from "../KeyBindings";
+import { onlineManager, type RemoteInputs } from "../OnlineMultiplayerManager";
+import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS, getInputMode } from "../GameSettings";
+import { TouchControls } from "../TouchControls";
+import { toggleMusic, setWorldIndex, startMusic } from "../MusicManager";
 import { createLavaBackground, updateLavaBackground, destroyLavaBackground, type LavaBackgroundState } from "../worlds/LavaBackground";
 import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBackground";
 import type { ParallaxLayer } from "../worlds/JungleBackground";
@@ -27,10 +36,12 @@ export class GameScene extends Phaser.Scene {
   private worldIndex: number = 0;
   private deaths: number = 0;
   private startTime: number = 0;
+  private gameMode: GameMode = "multiplayer";
   private lastCheckpointX: number = 0;
   private lastCheckpointY: number = 0;
   private previousPlayerX: number = 0;
   private isDead: boolean = false;
+  private isCompletingWorld: boolean = false;
   private isDucking: boolean = false;
   private deathText!: Phaser.GameObjects.Text;
   private worldText!: Phaser.GameObjects.Text;
@@ -66,6 +77,19 @@ export class GameScene extends Phaser.Scene {
   private jungleLayers: ParallaxLayer[] = [];
   private beachLayers: BeachParallaxLayer[] = [];
   private warZoneBackground: WarZoneBackgroundState | null = null;
+  private coinGroup!: Phaser.Physics.Arcade.Group;
+  private coinGfxMap: Map<Phaser.GameObjects.Rectangle, Phaser.GameObjects.Graphics> = new Map();
+  private coinsCollected: number = 0;
+  private coinText!: Phaser.GameObjects.Text;
+  private accessoryGfx!: Phaser.GameObjects.Graphics;
+  private onlineInputSendTimer: number = 0;
+  private onlineJumpLatch: boolean = false;
+  private disconnectOverlay: Phaser.GameObjects.Container | null = null;
+  private onlineRoleText: Phaser.GameObjects.Text | null = null;
+  private touchControls: TouchControls | null = null;
+  private secretGroup!: Phaser.Physics.Arcade.StaticGroup;
+  private secretAreas: { hitZone: Phaser.GameObjects.Rectangle; gfx: Phaser.GameObjects.Graphics; shimmerGfx: Phaser.GameObjects.Graphics; collected: boolean; cx: number; cy: number; w: number; h: number }[] = [];
+  private secretShimmerTimer: number = 0;
 
   constructor() {
     super({ key: "GameScene" });
@@ -78,14 +102,25 @@ export class GameScene extends Phaser.Scene {
     this.load.image("sand-platform", `${base}sand-platform.webp`);
   }
 
-  create(data: { worldIndex: number; deaths: number; startTime: number }) {
+  private levelSeed?: number;
+
+  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode; levelSeed?: number }) {
     this.worldIndex = data.worldIndex;
     this.deaths = data.deaths;
     this.startTime = data.startTime;
+    this.gameMode = data.gameMode || "multiplayer";
+    this.levelSeed = data.levelSeed;
     this.isDead = false;
+
+    setWorldIndex(this.worldIndex);
+    startMusic(this.worldIndex);
+    this.isCompletingWorld = false;
     this.isDucking = false;
     this.isPaused = false;
     this.pauseContainer = null;
+    this.onlineInputSendTimer = 0;
+    this.disconnectOverlay = null;
+    this.onlineRoleText = null;
     this.checkpoints = [];
     this.waterTimers = new Map();
     this.quicksandContactTimer = 0;
@@ -109,6 +144,10 @@ export class GameScene extends Phaser.Scene {
     this.bullets = null;
     this.bulletTimer = 0;
     this.bulletVisuals = [];
+    this.coinGfxMap = new Map();
+    this.coinsCollected = 0;
+    this.secretAreas = [];
+    this.secretShimmerTimer = 0;
     if (this.lavaBackground) {
       destroyLavaBackground(this.lavaBackground, this);
       this.lavaBackground = null;
@@ -129,8 +168,9 @@ export class GameScene extends Phaser.Scene {
     this.spikeGroup = this.physics.add.group({ allowGravity: false });
     this.movementGroup = this.physics.add.staticGroup();
     this.caveGroup = this.physics.add.staticGroup();
+    this.secretGroup = this.physics.add.staticGroup();
 
-    const levelTiles = generateLevel(this.worldIndex);
+    const levelTiles = generateLevel(this.worldIndex, this.levelSeed);
     this.buildLevel(levelTiles, world);
 
     const spawnX = 3 * TILE;
@@ -167,12 +207,59 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, LEVEL_WIDTH * TILE, 15 * TILE);
     this.physics.world.setBounds(0, 0, LEVEL_WIDTH * TILE, 20 * TILE);
 
+    const bindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
+    const bindings = getBindings(bindingsMode);
     this.cursors = {
-      left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-      right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-      jump: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      duck: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      left: this.input.keyboard!.addKey(bindings.left),
+      right: this.input.keyboard!.addKey(bindings.right),
+      jump: this.input.keyboard!.addKey(bindings.jump),
+      duck: this.input.keyboard!.addKey(bindings.duck),
     };
+
+    if (this.gameMode === "online") {
+      onlineManager.removeAllListeners();
+      onlineManager.resetRemoteInputs();
+
+      onlineManager.on("remote_input", (msg: any) => {
+        onlineManager.updateRemoteInputs(msg.inputs);
+      });
+
+      onlineManager.on("remote_death", () => {
+        this.handleDeath(true);
+      });
+
+      onlineManager.on("remote_pause", () => {
+        if (!this.isPaused) this.pause(true);
+      });
+
+      onlineManager.on("remote_unpause", () => {
+        if (this.isPaused) this.unpause(true);
+      });
+
+      if (onlineManager.role === "guest") {
+        onlineManager.on("game_state", (msg: any) => {
+          if (this.isDead || this.isPaused) return;
+          const s = msg.state;
+          if (s && typeof s.x === "number") {
+            this.player.setPosition(s.x, s.y);
+            this.player.body.setVelocity(s.vx, s.vy);
+          }
+        });
+
+        onlineManager.on("world_selected", (msg: any) => {
+          this.restartWorld(true, msg.seed);
+        });
+
+      }
+
+      onlineManager.on("partner_disconnected", () => {
+        this.showDisconnectOverlay();
+      });
+
+      onlineManager.on("disconnected", () => {
+        this.showDisconnectOverlay();
+      });
+    }
 
     this.pauseKey1 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.pauseKey2 = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -180,9 +267,37 @@ export class GameScene extends Phaser.Scene {
     this.pauseKey1.on("down", handlePause);
     this.pauseKey2.on("down", handlePause);
 
+    if (this.touchControls) {
+      this.touchControls.destroy();
+      this.touchControls = null;
+    }
+    if (getInputMode() === "mobile") {
+      const touchRole = this.gameMode === "online" ? (onlineManager.role ?? null) : null;
+      this.touchControls = new TouchControls(this, touchRole);
+      this.touchControls.show();
+    }
+
+    const handleResize = () => {
+      if (this.touchControls) {
+        this.touchControls.reposition();
+        if (!this.isPaused && !this.isDead) {
+          this.touchControls.show();
+        }
+      }
+    };
+    this.scale.on("resize", handleResize);
+
     this.events.on("shutdown", () => {
+      this.scale.off("resize", handleResize);
       this.pauseKey1.off("down", handlePause);
       this.pauseKey2.off("down", handlePause);
+      if (this.touchControls) {
+        this.touchControls.destroy();
+        this.touchControls = null;
+      }
+      if (this.gameMode === "online") {
+        onlineManager.removeAllListeners();
+      }
       if (this.lavaBackground) {
         destroyLavaBackground(this.lavaBackground, this);
         this.lavaBackground = null;
@@ -216,6 +331,19 @@ export class GameScene extends Phaser.Scene {
       color: "#e94560",
     }).setScrollFactor(0).setOrigin(1, 0).setDepth(100);
 
+    if (this.gameMode === "online") {
+      const role = onlineManager.role;
+      const roleLabel = role === "host" ? "You: LEFT / RIGHT" : "You: JUMP / DUCK";
+      const roleColor = role === "host" ? "#ffcc00" : "#00ccff";
+      this.onlineRoleText = this.add.text(16, 36, roleLabel, {
+        fontSize: "12px",
+        fontFamily: "monospace",
+        color: roleColor,
+        backgroundColor: "#0a0a1e",
+        padding: { x: 6, y: 2 },
+      }).setScrollFactor(0).setDepth(100).setOrigin(0, 0);
+    }
+
     if (this.worldIndex === 3) {
       this.bullets = this.physics.add.group({ allowGravity: false });
       this.physics.add.overlap(this.player, this.bullets, () => this.handleDeath(), undefined, this);
@@ -241,6 +369,76 @@ export class GameScene extends Phaser.Scene {
 
     if (this.worldIndex === 3) {
       this.warZoneBackground = createWarZoneBackground(this);
+    }
+
+    this.coinGroup = this.physics.add.group({ allowGravity: false });
+    this.spawnCoins(levelTiles);
+    this.physics.add.overlap(this.player, this.coinGroup, (_p, coin) => {
+      const c = coin as Phaser.GameObjects.Rectangle;
+      const g = this.coinGfxMap.get(c);
+      if (g) g.destroy();
+      this.coinGfxMap.delete(c);
+      c.destroy();
+      this.coinsCollected++;
+      addCoins(1);
+      this.coinText.setText(`Coins: ${getCoins()}`);
+    }, undefined, this);
+
+    this.coinText = this.add.text(784, 36, `Coins: ${getCoins()}`, {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#ffdd44",
+    }).setScrollFactor(0).setOrigin(1, 0).setDepth(100);
+
+    this.physics.add.overlap(this.player, this.secretGroup, (_p, secretHit) => {
+      const zone = secretHit as Phaser.GameObjects.Rectangle;
+      const area = this.secretAreas.find(s => s.hitZone === zone);
+      if (!area || area.collected) return;
+      area.collected = true;
+      addCoins(5);
+      this.coinsCollected += 5;
+      this.coinText.setText(`Coins: ${getCoins()}`);
+      this.showSecretReward(area.cx, area.cy);
+    }, undefined, this);
+
+    this.accessoryGfx = this.add.graphics().setDepth(11);
+  }
+
+  private spawnCoins(tiles: LevelTile[]) {
+    const groundCols = new Set<number>();
+    const hazardCols = new Set<number>();
+    tiles.forEach(t => {
+      if (t.type === "ground") groundCols.add(t.x);
+      if (t.type === "kill" || t.type === "spike" || t.type === "movement") hazardCols.add(t.x);
+    });
+
+    const groundLevel = LEVEL_HEIGHT - 3;
+    const coinSize = 12;
+
+    for (let col = 8; col < LEVEL_WIDTH - 5; col += 3 + Math.floor(Math.random() * 4)) {
+      if (!groundCols.has(col) || hazardCols.has(col)) continue;
+      if (Math.random() > 0.5) continue;
+
+      const heightOptions = [groundLevel - 2, groundLevel - 4, groundLevel - 6];
+      const coinY = heightOptions[Math.floor(Math.random() * heightOptions.length)];
+      const px = col * TILE + TILE / 2;
+      const py = coinY * TILE + TILE / 2;
+
+      const hitZone = this.add.rectangle(px, py, coinSize, coinSize, 0x000000, 0);
+      this.physics.add.existing(hitZone, false);
+      (hitZone.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      (hitZone.body as Phaser.Physics.Arcade.Body).setImmovable(true);
+      this.coinGroup.add(hitZone);
+
+      const gfx = this.add.graphics().setDepth(8);
+      gfx.fillStyle(0xffdd00, 1);
+      gfx.fillCircle(px, py, coinSize / 2);
+      gfx.fillStyle(0xffaa00, 1);
+      gfx.fillCircle(px - 1, py - 1, coinSize / 2 - 2);
+      gfx.fillStyle(0xffee66, 1);
+      gfx.fillCircle(px - 2, py - 2, 2);
+
+      this.coinGfxMap.set(hitZone, gfx);
     }
   }
 
@@ -520,6 +718,64 @@ export class GameScene extends Phaser.Scene {
 
           break;
         }
+        case "secret": {
+          const secretWidth = tile.width ?? 2;
+          const totalW = TILE * secretWidth;
+          const groundSurface = (LEVEL_HEIGHT - 2) * TILE;
+          const isUnderground = tile.y === LEVEL_HEIGHT - 2;
+          const totalH = isUnderground ? TILE * 2 : TILE * 2;
+          const centerX = px + (secretWidth - 1) * TILE / 2;
+          const centerY = isUnderground
+            ? groundSurface + TILE / 2 + TILE
+            : py + TILE / 2;
+          const left = centerX - totalW / 2;
+          const top = centerY - totalH / 2;
+
+          const secretGfx = this.add.graphics().setDepth(isUnderground ? -1 : 1);
+          const detailSeed = (tile.x * 59 + tile.y * 131) % 1000;
+          const detailRng = (i: number) => ((detailSeed + i * 283) % 1000) / 1000;
+
+          if (isUnderground) {
+            const pitTop = groundSurface;
+            const pitBottom = pitTop + TILE * 2;
+            const pitH = pitBottom - pitTop;
+
+            secretGfx.fillStyle(world.groundColor, 1);
+            secretGfx.fillRect(left, pitTop, totalW, pitH);
+            secretGfx.fillStyle(world.secretColor, 0.6);
+            secretGfx.fillRect(left, pitTop, totalW, pitH);
+            for (let i = 0; i < 4 * secretWidth; i++) {
+              const rx = left + 2 + detailRng(i) * (totalW - 4);
+              const ry = pitTop + 2 + detailRng(i + 10) * (pitH - 4);
+              const rs = 1 + detailRng(i + 20) * 1.5;
+              secretGfx.fillStyle(world.groundColor, 0.3 + detailRng(i + 30) * 0.15);
+              secretGfx.fillCircle(rx, ry, rs);
+            }
+            secretGfx.fillStyle(world.groundColor, 0.5);
+            secretGfx.fillRect(left, pitBottom - 2, totalW, 2);
+          } else {
+            secretGfx.fillStyle(world.platformColor, 0.85);
+            secretGfx.fillRect(left, top, totalW, totalH);
+            secretGfx.fillStyle(world.secretColor, 0.4);
+            secretGfx.fillRect(left, top, totalW, totalH);
+            for (let i = 0; i < 3 * secretWidth; i++) {
+              const rx = left + 2 + detailRng(i) * (totalW - 4);
+              const ry = top + 2 + detailRng(i + 10) * (totalH - 4);
+              const rs = 1 + detailRng(i + 20) * 1.5;
+              secretGfx.fillStyle(world.platformColor, 0.25 + detailRng(i + 30) * 0.1);
+              secretGfx.fillCircle(rx, ry, rs);
+            }
+          }
+
+          const shimmerGfx = this.add.graphics().setDepth(isUnderground ? 0 : 2);
+
+          const hitZone = this.add.rectangle(centerX, centerY, totalW - 4, totalH - 4, 0x000000, 0);
+          this.secretGroup.add(hitZone);
+          (hitZone.body as Phaser.Physics.Arcade.StaticBody).setSize(totalW - 4, totalH - 4);
+
+          this.secretAreas.push({ hitZone, gfx: secretGfx, shimmerGfx, collected: false, cx: centerX, cy: centerY, w: totalW, h: totalH });
+          break;
+        }
         case "checkpoint": {
           const groundSurfaceY = (LEVEL_HEIGHT - 2) * TILE;
           const flagY = groundSurfaceY - 20;
@@ -696,7 +952,128 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private getEffectiveInputs(): { leftDown: boolean; rightDown: boolean; jumpJustDown: boolean; duckDown: boolean } {
+    if (this.gameMode !== "online") {
+      const kbLeft = this.cursors.left.isDown;
+      const kbRight = this.cursors.right.isDown;
+      const kbJump = Phaser.Input.Keyboard.JustDown(this.cursors.jump);
+      const kbDuck = this.cursors.duck.isDown;
+
+      if (this.touchControls) {
+        const touch = this.touchControls.getState();
+        return {
+          leftDown: kbLeft || touch.leftDown,
+          rightDown: kbRight || touch.rightDown,
+          jumpJustDown: kbJump || touch.jumpJustDown,
+          duckDown: kbDuck || touch.duckDown,
+        };
+      }
+
+      return {
+        leftDown: kbLeft,
+        rightDown: kbRight,
+        jumpJustDown: kbJump,
+        duckDown: kbDuck,
+      };
+    }
+
+    const remote = onlineManager.getRemoteInputs();
+    const role = onlineManager.role;
+    const touch = this.touchControls ? this.touchControls.getState() : null;
+
+    if (role === "host") {
+      return {
+        leftDown: this.cursors.left.isDown || (touch ? touch.leftDown : false),
+        rightDown: this.cursors.right.isDown || (touch ? touch.rightDown : false),
+        jumpJustDown: remote.jump,
+        duckDown: remote.duck,
+      };
+    } else {
+      return {
+        leftDown: remote.left,
+        rightDown: remote.right,
+        jumpJustDown: Phaser.Input.Keyboard.JustDown(this.cursors.jump) || (touch ? touch.jumpJustDown : false),
+        duckDown: this.cursors.duck.isDown || (touch ? touch.duckDown : false),
+      };
+    }
+  }
+
+  private sendOnlineInputs() {
+    if (this.gameMode !== "online") return;
+    const role = onlineManager.role;
+    const touch = this.touchControls ? this.touchControls.getState() : null;
+    if (role === "host") {
+      onlineManager.sendInputs({
+        left: this.cursors.left.isDown || (touch ? touch.leftDown : false),
+        right: this.cursors.right.isDown || (touch ? touch.rightDown : false),
+        jump: false,
+        duck: false,
+      });
+    } else {
+      onlineManager.sendInputs({
+        left: false,
+        right: false,
+        jump: this.onlineJumpLatch,
+        duck: this.cursors.duck.isDown || (touch ? touch.duckDown : false),
+      });
+    }
+  }
+
+  private showDisconnectOverlay() {
+    if (this.disconnectOverlay) return;
+    this.isPaused = true;
+    if (this.touchControls) {
+      this.touchControls.hide();
+    }
+    this.physics.world.pause();
+    this.tweens.pauseAll();
+
+    const { width, height } = this.cameras.main;
+    const scrollX = this.cameras.main.scrollX;
+    const scrollY = this.cameras.main.scrollY;
+    const cx = scrollX + width / 2;
+    const cy = scrollY + height / 2;
+
+    this.disconnectOverlay = this.add.container(cx, cy).setDepth(600);
+
+    const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.8);
+    this.disconnectOverlay.add(overlay);
+
+    const msg = this.add.text(0, -40, "PARTNER DISCONNECTED", {
+      fontSize: "28px",
+      fontFamily: "monospace",
+      color: "#ff4444",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.disconnectOverlay.add(msg);
+
+    const lobbyBtn = this.add.rectangle(0, 30, 220, 44, 0x16213e, 0.95);
+    lobbyBtn.setStrokeStyle(2, 0x0f3460);
+    lobbyBtn.setInteractive({ useHandCursor: true });
+    this.disconnectOverlay.add(lobbyBtn);
+
+    const lobbyLabel = this.add.text(0, 30, "Return to Lobby", {
+      fontSize: "18px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+    }).setOrigin(0.5);
+    this.disconnectOverlay.add(lobbyLabel);
+
+    lobbyBtn.on("pointerover", () => { lobbyBtn.setFillStyle(0x1e2d4a, 1); lobbyLabel.setColor("#ffffff"); });
+    lobbyBtn.on("pointerout", () => { lobbyBtn.setFillStyle(0x16213e, 0.95); lobbyLabel.setColor("#cccccc"); });
+    lobbyBtn.on("pointerdown", () => {
+      this.isPaused = false;
+      this.physics.world.resume();
+      this.tweens.resumeAll();
+      onlineManager.disconnect();
+      this.scene.start("LobbyScene");
+    });
+  }
+
   update(_time: number, delta: number) {
+    if (this.touchControls) {
+      this.touchControls.update();
+    }
     if (this.isPaused) return;
     if (this.isDead) return;
 
@@ -718,10 +1095,38 @@ export class GameScene extends Phaser.Scene {
       updateWarZoneBackground(this.warZoneBackground, delta);
     }
 
+    if (this.gameMode === "online") {
+      if (onlineManager.role === "guest") {
+        if (Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
+          this.onlineJumpLatch = true;
+        }
+        if (this.touchControls) {
+          const touchState = this.touchControls.getState();
+          if (touchState.jumpJustDown) {
+            this.onlineJumpLatch = true;
+          }
+        }
+      }
+      this.onlineInputSendTimer += delta;
+      if (this.onlineInputSendTimer >= 33) {
+        this.sendOnlineInputs();
+        this.onlineJumpLatch = false;
+        if (onlineManager.role === "host") {
+          onlineManager.sendPosition(
+            this.player.x, this.player.y,
+            this.player.body.velocity.x, this.player.body.velocity.y
+          );
+        }
+        this.onlineInputSendTimer = 0;
+      }
+    }
+
+    const inputs = this.getEffectiveInputs();
+
     if (this.vineGrabCooldown > 0) this.vineGrabCooldown -= delta;
 
     if (this.grabbedVine) {
-      if (Phaser.Input.Keyboard.JustDown(this.cursors.jump)) {
+      if (inputs.jumpJustDown) {
         const v = this.grabbedVine;
         v.pivot.setVisible(true);
         const swingAngle = Math.sin(v.angle) * (Math.PI / 2);
@@ -755,28 +1160,28 @@ export class GameScene extends Phaser.Scene {
       this.player.body.setVelocityX(0);
     } else if (this.insideTank) {
       let moveX = 0;
-      if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
-      if (this.cursors.right.isDown) moveX += PHYSICS.MOVE_SPEED;
+      if (inputs.leftDown) moveX -= PHYSICS.MOVE_SPEED;
+      if (inputs.rightDown) moveX += PHYSICS.MOVE_SPEED;
       this.player.body.setVelocityX(moveX);
     } else {
       let moveX = 0;
-      if (this.cursors.left.isDown) moveX -= PHYSICS.MOVE_SPEED;
-      if (this.cursors.right.isDown) moveX += PHYSICS.MOVE_SPEED;
+      if (inputs.leftDown) moveX -= PHYSICS.MOVE_SPEED;
+      if (inputs.rightDown) moveX += PHYSICS.MOVE_SPEED;
       this.player.body.setVelocityX(moveX);
 
       const onGround = this.player.body.blocked.down || this.player.body.touching.down;
 
-      if (Phaser.Input.Keyboard.JustDown(this.cursors.jump) && onGround) {
+      if (inputs.jumpJustDown && onGround) {
         this.player.body.setVelocityY(PHYSICS.JUMP_VELOCITY);
       }
     }
 
-    if (this.cursors.duck.isDown && !this.isDucking) {
+    if (inputs.duckDown && !this.isDucking) {
       this.isDucking = true;
       this.player.setSize(28, PHYSICS.DUCK_HEIGHT);
       this.player.body.setSize(28, PHYSICS.DUCK_HEIGHT);
       this.player.y += (PHYSICS.NORMAL_HEIGHT - PHYSICS.DUCK_HEIGHT) / 2;
-    } else if (!this.cursors.duck.isDown && this.isDucking) {
+    } else if (!inputs.duckDown && this.isDucking) {
       const heightDiff = PHYSICS.NORMAL_HEIGHT - PHYSICS.DUCK_HEIGHT;
       const proposedTop = this.player.body.y - heightDiff;
       let blocked = false;
@@ -802,11 +1207,15 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.updateWorldMechanics(delta);
+    this.updateWorldMechanics(delta, inputs);
+    this.updateSecretShimmer(delta);
     this.checkCheckpoints();
 
     const currentHeight = this.isDucking ? PHYSICS.DUCK_HEIGHT : PHYSICS.NORMAL_HEIGHT;
     drawEyes(this.eyesGfx, this.player.x, this.player.y, currentHeight);
+
+    this.accessoryGfx.clear();
+    drawAccessories(this.accessoryGfx, this.player.x, this.player.y, 28, currentHeight, getSelectedColor().fill);
 
     if (this.player.x > (LEVEL_WIDTH - 3) * TILE) {
       this.completeWorld();
@@ -815,7 +1224,7 @@ export class GameScene extends Phaser.Scene {
     this.previousPlayerX = this.player.x;
   }
 
-  private updateWorldMechanics(delta: number) {
+  private updateWorldMechanics(delta: number, inputs: { leftDown: boolean; rightDown: boolean; jumpJustDown: boolean; duckDown: boolean }) {
     switch (this.worldIndex) {
       case 0:
 
@@ -831,7 +1240,7 @@ export class GameScene extends Phaser.Scene {
         this.updateVineSwings(delta);
         break;
       case 3:
-        this.updateTankPush(delta);
+        this.updateTankPush(delta, inputs.jumpJustDown);
         this.updateBullets(delta);
         break;
     }
@@ -1290,7 +1699,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private updateTankPush(delta: number) {
+  private updateTankPush(delta: number, jumpPressed: boolean) {
     if (this.tankExitCooldown > 0) {
       this.tankExitCooldown -= delta;
     }
@@ -1313,7 +1722,7 @@ export class GameScene extends Phaser.Scene {
         this.player.body.setVelocityX(0);
       }
 
-      if (this.cursors.jump.isDown) {
+      if (jumpPressed) {
         this.insideTank = null;
         this.tankExitCooldown = 500;
         this.player.body.setAllowGravity(true);
@@ -1388,10 +1797,19 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private handleDeath() {
-    if (this.isDead) return;
+  private handleDeath(fromRemote = false) {
+    if (this.isDead || this.isCompletingWorld) return;
     this.isDead = true;
     this.deaths++;
+    recordDeath();
+
+    if (this.touchControls) {
+      this.touchControls.hide();
+    }
+
+    if (!fromRemote && this.gameMode === "online") {
+      onlineManager.sendDeath();
+    }
     this.deathText.setText(`Deaths: ${this.deaths}`);
 
     let deathVine: typeof this.grabbedVine = null;
@@ -1422,16 +1840,68 @@ export class GameScene extends Phaser.Scene {
         this.player.setSize(28, PHYSICS.NORMAL_HEIGHT);
         this.player.body.setSize(28, PHYSICS.NORMAL_HEIGHT);
       }
+      if (this.touchControls) {
+        this.touchControls.show();
+      }
     });
   }
 
   private completeWorld() {
-    markWorldCompleted(this.worldIndex, this.deaths);
-    if (allWorldsCompleted()) {
-      this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime });
-    } else {
-      this.scene.start("TitleScene");
+    if (this.isCompletingWorld) return;
+    this.isCompletingWorld = true;
+
+    if (this.touchControls) {
+      this.touchControls.hide();
     }
+
+    markWorldCompleted(this.worldIndex, this.deaths);
+    recordLevelCompletion();
+
+    const baseReward = Math.max(0, 10 - this.deaths);
+    const multiplier = this.gameMode === "online" ? 3 : 1;
+    const coinReward = baseReward * multiplier;
+    if (coinReward > 0) {
+      addCoins(coinReward);
+      this.coinText.setText(`Coins: ${getCoins()}`);
+    }
+
+    this.physics.world.pause();
+
+    const { width, height } = this.cameras.main;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const overlay = this.add.rectangle(cx, cy, width, height, 0x000000, 0.6)
+      .setScrollFactor(0)
+      .setDepth(600);
+
+    let rewardMsg: string;
+    if (coinReward <= 0) {
+      rewardMsg = `Level Complete!\nNo bonus coins (${this.deaths} deaths)`;
+    } else if (this.gameMode === "online") {
+      rewardMsg = `Level Complete!\n+${coinReward} bonus coins (3x co-op!)`;
+    } else {
+      rewardMsg = `Level Complete!\n+${coinReward} bonus coins`;
+    }
+
+    const rewardText = this.add.text(cx, cy, rewardMsg, {
+      fontFamily: "monospace",
+      fontSize: "28px",
+      color: coinReward > 0 ? "#ffd700" : "#cccccc",
+      align: "center",
+      stroke: "#000000",
+      strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(601);
+
+    this.time.delayedCall(2000, () => {
+      overlay.destroy();
+      rewardText.destroy();
+      if (allWorldsCompleted()) {
+        this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime, gameMode: this.gameMode });
+      } else {
+        this.scene.start("TitleScene", { gameMode: this.gameMode });
+      }
+    });
   }
 
   private togglePause() {
@@ -1442,9 +1912,96 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private pause() {
+  private updateSecretShimmer(delta: number) {
+    this.secretShimmerTimer += delta;
+    const world = WORLDS[this.worldIndex];
+    for (const area of this.secretAreas) {
+      area.shimmerGfx.clear();
+      if (area.collected) continue;
+      const t = this.secretShimmerTimer * 0.0012;
+      const phase = t;
+      const visible = Math.sin(phase * 1.7) > 0.6;
+      if (visible) {
+        const sparkAlpha = 0.08 + Math.sin(phase * 2.3) * 0.06;
+        const sx = area.cx + Math.cos(phase * 0.7) * (area.w * 0.2);
+        const sy = area.cy + Math.sin(phase * 0.5) * (area.h * 0.15);
+        area.shimmerGfx.fillStyle(world.secretAccent, sparkAlpha);
+        area.shimmerGfx.fillCircle(sx, sy, 1 + Math.sin(phase) * 0.4);
+      }
+    }
+  }
+
+  private showSecretReward(cx: number, cy: number) {
+    const world = WORLDS[this.worldIndex];
+
+    const rewardText = this.add.text(cx, cy - 10, "+5", {
+      fontSize: "20px",
+      fontFamily: "monospace",
+      fontStyle: "bold",
+      color: "#ffdd00",
+      stroke: "#000000",
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(200);
+
+    this.tweens.add({
+      targets: rewardText,
+      y: cy - 50,
+      alpha: 0,
+      duration: 1200,
+      ease: "Power2",
+      onComplete: () => rewardText.destroy(),
+    });
+
+    const sparkleGfx = this.add.graphics().setDepth(199);
+    const sparkles: { x: number; y: number; vx: number; vy: number; life: number; size: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      sparkles.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * (40 + Math.random() * 30),
+        vy: Math.sin(angle) * (40 + Math.random() * 30) - 20,
+        life: 600 + Math.random() * 400,
+        size: 2 + Math.random() * 2,
+      });
+    }
+
+    let elapsed = 0;
+    const sparkleEvent = this.time.addEvent({
+      delay: 16,
+      repeat: 60,
+      callback: () => {
+        elapsed += 16;
+        sparkleGfx.clear();
+        for (const s of sparkles) {
+          const progress = Math.min(elapsed / s.life, 1);
+          if (progress >= 1) continue;
+          s.x += s.vx * 0.016;
+          s.y += s.vy * 0.016;
+          s.vy += 60 * 0.016;
+          const alpha = 1 - progress;
+          sparkleGfx.fillStyle(world.secretAccent, alpha);
+          sparkleGfx.fillCircle(s.x, s.y, s.size * (1 - progress * 0.5));
+          sparkleGfx.fillStyle(0xffdd00, alpha * 0.8);
+          sparkleGfx.fillCircle(s.x, s.y, s.size * 0.5 * (1 - progress * 0.5));
+        }
+        if (elapsed >= 1000) {
+          sparkleGfx.destroy();
+          sparkleEvent.destroy();
+        }
+      },
+    });
+  }
+
+  private pause(fromRemote = false) {
     if (this.isPaused || this.isDead) return;
     this.isPaused = true;
+    if (!fromRemote && this.gameMode === "online") {
+      onlineManager.sendPause();
+    }
+    if (this.touchControls) {
+      this.touchControls.hide();
+    }
     this.physics.world.pause();
     this.tweens.pauseAll();
 
@@ -1459,7 +2016,7 @@ export class GameScene extends Phaser.Scene {
     const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.7);
     this.pauseContainer.add(overlay);
 
-    const titleText = this.add.text(0, -80, "PAUSED", {
+    const titleText = this.add.text(0, -120, "PAUSED", {
       fontSize: "42px",
       fontFamily: "monospace",
       color: "#ffffff",
@@ -1467,13 +2024,81 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.pauseContainer.add(titleText);
 
+    const settings = getSettings();
+
+    const musicLabel = this.add.text(-90, -70, "Music:", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+    }).setOrigin(0, 0.5);
+    this.pauseContainer.add(musicLabel);
+
+    const musicBtnBg = this.add.rectangle(60, -70, 80, 26, settings.musicEnabled ? 0x00aa44 : 0x662222, 0.9);
+    musicBtnBg.setStrokeStyle(1, settings.musicEnabled ? 0x00ff66 : 0xff4444);
+    musicBtnBg.setInteractive({ useHandCursor: true });
+    this.pauseContainer.add(musicBtnBg);
+
+    const musicBtnLabel = this.add.text(60, -70, settings.musicEnabled ? "ON" : "OFF", {
+      fontSize: "12px",
+      fontFamily: "monospace",
+      color: "#ffffff",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.pauseContainer.add(musicBtnLabel);
+
+    musicBtnBg.on("pointerdown", () => {
+      const newVal = !getSettings().musicEnabled;
+      setMusicEnabled(newVal);
+      toggleMusic(newVal);
+      musicBtnBg.setFillStyle(newVal ? 0x00aa44 : 0x662222, 0.9);
+      musicBtnBg.setStrokeStyle(1, newVal ? 0x00ff66 : 0xff4444);
+      musicBtnLabel.setText(newVal ? "ON" : "OFF");
+    });
+
+    const bgLabel = this.add.text(-90, -40, "Background:", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#cccccc",
+    }).setOrigin(0, 0.5);
+    this.pauseContainer.add(bgLabel);
+
+    const swatchSize = 18;
+    const swatchGap = 5;
+    const swatchStartX = 20;
+    const bgIndicators: Phaser.GameObjects.Rectangle[] = [];
+
+    BG_PRESETS.forEach((preset, i) => {
+      const sx = swatchStartX + i * (swatchSize + swatchGap);
+      const isSelected = i === settings.bgColorIndex;
+
+      const indicator = this.add.rectangle(sx, -40, swatchSize + 3, swatchSize + 3, 0xffffff, isSelected ? 1 : 0);
+      bgIndicators.push(indicator);
+      this.pauseContainer!.add(indicator);
+
+      const swatch = this.add.rectangle(sx, -40, swatchSize, swatchSize, preset.hex);
+      swatch.setStrokeStyle(1, 0x666666);
+      swatch.setInteractive({ useHandCursor: true });
+      this.pauseContainer!.add(swatch);
+
+      swatch.on("pointerdown", () => {
+        setBgColorIndex(i);
+        bgIndicators.forEach((ind, j) => {
+          ind.setFillStyle(0xffffff, j === i ? 1 : 0);
+        });
+      });
+    });
+
     const btnW = 200;
     const btnH = 44;
-    const buttons = [
-      { label: "Unpause", y: -10, action: () => this.unpause() },
-      { label: "Restart", y: 50, action: () => this.restartWorld() },
-      { label: "Home", y: 110, action: () => this.goHome() },
+    const isOnlineGuest = this.gameMode === "online" && onlineManager.role === "guest";
+    const allButtons = [
+      { label: "Unpause", y: 10, action: () => this.unpause() },
+      { label: "Restart", y: 62, action: () => this.restartWorld(), hostOnly: true },
+      { label: "Home", y: 114, action: () => this.goHome() },
     ];
+    const buttons = isOnlineGuest
+      ? allButtons.filter(b => !b.hostOnly).map((b, i) => ({ ...b, y: 10 + i * 52 }))
+      : allButtons;
 
     buttons.forEach((btn) => {
       const bg = this.add.rectangle(0, btn.y, btnW, btnH, 0x16213e, 0.95);
@@ -1500,28 +2125,43 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private unpause() {
+  private unpause(fromRemote = false) {
     if (!this.isPaused) return;
     this.isPaused = false;
+    if (!fromRemote && this.gameMode === "online") {
+      onlineManager.sendUnpause();
+    }
     this.physics.world.resume();
     this.tweens.resumeAll();
     if (this.pauseContainer) {
       this.pauseContainer.destroy();
       this.pauseContainer = null;
     }
+    if (this.touchControls) {
+      this.touchControls.show();
+    }
   }
 
-  private restartWorld() {
+  private restartWorld(fromRemote = false, remoteSeed?: number) {
     this.isPaused = false;
     this.physics.world.resume();
     this.tweens.resumeAll();
-    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now() });
+    let seed = remoteSeed;
+    if (this.gameMode === "online" && !fromRemote) {
+      seed = Math.floor(Math.random() * 2147483646) + 1;
+      onlineManager.sendWorldSelect(this.worldIndex, seed);
+    }
+    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now(), gameMode: this.gameMode, levelSeed: seed });
   }
 
   private goHome() {
     this.isPaused = false;
     this.physics.world.resume();
     this.tweens.resumeAll();
-    this.scene.start("TitleScene");
+    if (this.gameMode === "online") {
+      onlineManager.leaveRoom();
+      onlineManager.removeAllListeners();
+    }
+    this.scene.start("TitleScene", { gameMode: this.gameMode });
   }
 }

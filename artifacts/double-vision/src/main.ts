@@ -1,8 +1,14 @@
 import Phaser from "phaser";
+import { StartScene } from "./scenes/StartScene";
+import { AuthScene } from "./scenes/AuthScene";
+import { ModeSelectScene } from "./scenes/ModeSelectScene";
+import { LobbyScene } from "./scenes/LobbyScene";
 import { TitleScene } from "./scenes/TitleScene";
+import { ShopScene } from "./scenes/ShopScene";
 import { WarningScene } from "./scenes/WarningScene";
 import { GameScene } from "./scenes/GameScene";
 import { WinScene } from "./scenes/WinScene";
+import { InputModeSelectScene } from "./scenes/InputModeSelectScene";
 
 const basePath = (import.meta as any).env?.BASE_URL || "/";
 
@@ -23,7 +29,22 @@ const config: Phaser.Types.Core.GameConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [TitleScene, WarningScene, GameScene, WinScene],
+  input: {
+    activePointers: 4,
+  },
+  dom: { createContainer: true },
+  scene: [
+    StartScene,
+    AuthScene,
+    InputModeSelectScene,
+    ModeSelectScene,
+    LobbyScene,
+    TitleScene,
+    ShopScene,
+    WarningScene,
+    GameScene,
+    WinScene,
+  ],
 };
 
 new Phaser.Game(config);

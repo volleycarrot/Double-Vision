@@ -3,7 +3,7 @@ import { TILE, LEVEL_WIDTH, LEVEL_HEIGHT, CHECKPOINT_COUNT, type WorldConfig } f
 export interface LevelTile {
   x: number;
   y: number;
-  type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint" | "cave";
+  type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint" | "cave" | "secret";
   width?: number;
 }
 
@@ -15,9 +15,9 @@ function seededRandom(seed: number) {
   };
 }
 
-export function generateLevel(worldIndex: number): LevelTile[] {
+export function generateLevel(worldIndex: number, seed?: number): LevelTile[] {
   const tiles: LevelTile[] = [];
-  const baseSeed = Math.floor(Math.random() * 2147483646) + 1;
+  const baseSeed = seed ?? Math.floor(Math.random() * 2147483646) + 1;
   const rand = seededRandom(baseSeed);
   const checkpointSpacing = Math.floor(LEVEL_WIDTH / (CHECKPOINT_COUNT + 1));
 
@@ -286,64 +286,282 @@ export function generateLevel(worldIndex: number): LevelTile[] {
         }
       }
     }
-  }
 
-  const MAX_CONSECUTIVE_UNSAFE = 5;
-  const isColumnUnsafe = (col: number): boolean => {
-    const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
-    if (!hasGround) return true;
-    const hasHazard = tiles.some(t =>
-      (t.type === "kill" || t.type === "spike" || t.type === "movement") &&
-      t.x <= col && col < t.x + (t.width ?? 1) &&
-      (t.y === groundLevel || t.y === groundLevel - 1)
-    );
-    return hasHazard;
-  };
-  for (let x = 0; x < LEVEL_WIDTH; x++) {
-    const isUnsafe = isColumnUnsafe(x);
-
-    if (isUnsafe) {
-      let runStart = x;
-      let runLen = 1;
-      while (runLen < MAX_CONSECUTIVE_UNSAFE && x + 1 < LEVEL_WIDTH) {
-        const nextX = x + 1;
-        const nextUnsafe = isColumnUnsafe(nextX);
-        if (!nextUnsafe) break;
-        x++;
-        runLen++;
+    const holeClearRadius = 4;
+    const checkpointColumns = new Set<number>();
+    for (const t of tiles) {
+      if (t.type === "checkpoint") {
+        checkpointColumns.add(t.x);
+        checkpointColumns.add(t.x + 1);
       }
-
-      if (runLen >= MAX_CONSECUTIVE_UNSAFE) {
-        const safeX = runStart + MAX_CONSECUTIVE_UNSAFE;
-        if (safeX < LEVEL_WIDTH) {
-          for (let i = tiles.length - 1; i >= 0; i--) {
-            const t = tiles[i];
-            if ((t.type === "kill" || t.type === "spike" || t.type === "movement") &&
-                t.x <= safeX && safeX < t.x + (t.width ?? 1) &&
-                (t.y === groundLevel || t.y === groundLevel - 1)) {
-              if (t.width && t.width > 1) {
-                const origX = t.x;
-                const origWidth = t.width;
-                tiles.splice(i, 1);
-                if (safeX > origX) {
-                  tiles.push({ ...t, x: origX, width: safeX - origX });
-                }
-                if (origX + origWidth > safeX + 1) {
-                  tiles.push({ ...t, x: safeX + 1, width: origX + origWidth - safeX - 1 });
-                }
-              } else {
-                tiles.splice(i, 1);
-              }
+    }
+    for (const cave of caveTiles) {
+      const caveStart = cave.x;
+      const caveEnd = cave.x + (cave.width ?? 1) - 1;
+      for (let col = caveStart - holeClearRadius; col <= caveEnd + holeClearRadius; col++) {
+        if (col < 0 || col >= LEVEL_WIDTH) continue;
+        if (checkpointColumns.has(col)) continue;
+        if (noGroundColumns.has(col)) {
+          noGroundColumns.delete(col);
+          const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
+          if (!hasGround) {
+            tiles.push({ x: col, y: groundLevel, type: "ground" });
+            tiles.push({ x: col, y: groundLevel + 1, type: "ground" });
+          }
+          if (isLavaWorld) {
+            const hasKill = tiles.some(t => t.type === "kill" && t.y === groundLevel && t.x === col);
+            if (!hasKill) {
+              tiles.push({ x: col, y: groundLevel, type: "kill" });
             }
           }
-          noGroundColumns.delete(safeX);
-          hazardOccupied.delete(safeX);
-          quicksandColumns.delete(safeX);
-          const hasGroundNow = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === safeX);
-          if (!hasGroundNow) {
-            tiles.push({ x: safeX, y: groundLevel, type: "ground" });
-            tiles.push({ x: safeX, y: groundLevel + 1, type: "ground" });
+        }
+      }
+    }
+
+    for (let i = gapRanges.length - 1; i >= 0; i--) {
+      const gap = gapRanges[i];
+      const gapEnd = gap.start + gap.width - 1;
+      for (const cave of caveTiles) {
+        const caveStart = cave.x;
+        const caveEndX = cave.x + (cave.width ?? 1) - 1;
+        if (gap.start <= caveEndX + holeClearRadius && gapEnd >= caveStart - holeClearRadius) {
+          gapRanges.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  const secretRand = seededRandom(baseSeed + 5555);
+  const targetSecrets = 1 + Math.floor(secretRand() * 2);
+  const secretSpacing = Math.floor((LEVEL_WIDTH - 20) / (targetSecrets + 1));
+  let secretsPlaced = 0;
+
+  const isNearOther = (col: number) => {
+    return tiles.some(t => t.type === "checkpoint" && Math.abs(t.x - col) <= 5) ||
+           tiles.some(t => t.type === "cave" && Math.abs(t.x - col) <= 6) ||
+           tiles.some(t => t.type === "secret" && Math.abs(t.x - col) <= 12);
+  };
+
+  for (let si = 0; si < targetSecrets && secretsPlaced < 2; si++) {
+    const baseCol = 10 + (si + 1) * secretSpacing + Math.floor((secretRand() - 0.5) * 8);
+    const secretWidth = 2;
+
+    let bestCol = -1;
+    for (let offset = 0; offset < 40; offset++) {
+      const tryCol = baseCol + (offset % 2 === 0 ? offset / 2 : -Math.ceil(offset / 2));
+      if (tryCol < 8 || tryCol + secretWidth >= LEVEL_WIDTH - 5) continue;
+      if (isNearOther(tryCol)) continue;
+      let canPlace = true;
+      for (let dx = 0; dx < secretWidth; dx++) {
+        const col = tryCol + dx;
+        if (hazardOccupied.has(col) || noGroundColumns.has(col)) {
+          canPlace = false;
+          break;
+        }
+      }
+      if (canPlace) {
+        bestCol = tryCol;
+        break;
+      }
+    }
+    if (bestCol >= 0) {
+      tiles.push({ x: bestCol, y: groundLevel, type: "secret", width: secretWidth });
+      for (let dx = 0; dx < secretWidth; dx++) {
+        hazardOccupied.add(bestCol + dx);
+        for (let i = tiles.length - 1; i >= 0; i--) {
+          const t = tiles[i];
+          if (t.x === bestCol + dx && t.y === groundLevel && t.type === "ground") {
+            tiles.splice(i, 1);
           }
+        }
+      }
+      for (const wallCol of [bestCol - 1, bestCol + secretWidth]) {
+        if (wallCol >= 0 && wallCol < LEVEL_WIDTH) {
+          const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === wallCol);
+          if (!hasGround && !noGroundColumns.has(wallCol)) {
+            tiles.push({ x: wallCol, y: groundLevel, type: "ground" });
+          }
+        }
+      }
+      secretsPlaced++;
+    }
+  }
+
+  while (secretsPlaced < 1) {
+    const fallbackCol = 12 + Math.floor(secretRand() * (LEVEL_WIDTH - 24));
+    const secretWidth = 2;
+    if (isNearOther(fallbackCol)) { secretRand(); continue; }
+    let canPlace = true;
+    for (let dx = 0; dx < secretWidth; dx++) {
+      if (noGroundColumns.has(fallbackCol + dx)) { canPlace = false; break; }
+    }
+    if (!canPlace) continue;
+    tiles.push({ x: fallbackCol, y: groundLevel, type: "secret", width: secretWidth });
+    for (let dx = 0; dx < secretWidth; dx++) {
+      hazardOccupied.add(fallbackCol + dx);
+      for (let i = tiles.length - 1; i >= 0; i--) {
+        const t = tiles[i];
+        if (t.x === fallbackCol + dx && t.y === groundLevel && t.type === "ground") {
+          tiles.splice(i, 1);
+        }
+      }
+    }
+    for (const wallCol of [fallbackCol - 1, fallbackCol + secretWidth]) {
+      if (wallCol >= 0 && wallCol < LEVEL_WIDTH) {
+        const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === wallCol);
+        if (!hasGround && !noGroundColumns.has(wallCol)) {
+          tiles.push({ x: wallCol, y: groundLevel, type: "ground" });
+        }
+      }
+    }
+    secretsPlaced++;
+  }
+
+  const secretClearRadius = 2;
+  const secretTiles = tiles.filter(t => t.type === "secret");
+  const hazardTypesForSecretClear = new Set(["kill", "spike", "movement"]);
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (!hazardTypesForSecretClear.has(t.type)) continue;
+    for (const secret of secretTiles) {
+      const secretEndX = secret.x + (secret.width ?? 1) - 1;
+      const tileEndX = t.width ? t.x + t.width - 1 : t.x;
+      if (t.x <= secretEndX + secretClearRadius && tileEndX >= secret.x - secretClearRadius) {
+        tiles.splice(i, 1);
+        break;
+      }
+    }
+  }
+
+  for (const secret of secretTiles) {
+    const sStart = secret.x;
+    const sEnd = secret.x + (secret.width ?? 1) - 1;
+    for (let col = sStart - secretClearRadius; col <= sEnd + secretClearRadius; col++) {
+      if (col < 0 || col >= LEVEL_WIDTH) continue;
+      if (col >= sStart && col <= sEnd) continue;
+      if (noGroundColumns.has(col)) {
+        noGroundColumns.delete(col);
+        const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
+        if (!hasGround) {
+          tiles.push({ x: col, y: groundLevel, type: "ground" });
+          tiles.push({ x: col, y: groundLevel + 1, type: "ground" });
+        }
+      }
+    }
+  }
+
+  const WINDOW_SIZE = 6;
+  const MAX_OBSTACLES_PER_WINDOW = 3;
+  const obstacleTypes = new Set(["kill", "spike"]);
+
+  const isObstacleColumn = (col: number): boolean => {
+    const hasGround = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
+    if (!hasGround) return true;
+    return tiles.some(t => {
+      if (!obstacleTypes.has(t.type)) return false;
+      const tStart = t.x;
+      const tEnd = t.x + (t.width ?? 1) - 1;
+      return col >= tStart && col <= tEnd;
+    });
+  };
+
+  const removeObstacleAt = (col: number): void => {
+    for (let i = tiles.length - 1; i >= 0; i--) {
+      const t = tiles[i];
+      if (!obstacleTypes.has(t.type)) continue;
+      const tStart = t.x;
+      const tEnd = t.x + (t.width ?? 1) - 1;
+      if (col < tStart || col > tEnd) continue;
+      if (t.width && t.width > 1) {
+        const origX = t.x;
+        const origWidth = t.width;
+        tiles.splice(i, 1);
+        if (col > origX) {
+          tiles.push({ ...t, x: origX, width: col - origX });
+        }
+        if (origX + origWidth > col + 1) {
+          tiles.push({ ...t, x: col + 1, width: origX + origWidth - col - 1 });
+        }
+      } else {
+        tiles.splice(i, 1);
+      }
+    }
+    hazardOccupied.delete(col);
+    quicksandColumns.delete(col);
+    if (noGroundColumns.has(col)) {
+      noGroundColumns.delete(col);
+      const hasGroundNow = tiles.some(t => t.type === "ground" && t.y === groundLevel && t.x === col);
+      if (!hasGroundNow) {
+        tiles.push({ x: col, y: groundLevel, type: "ground" });
+        tiles.push({ x: col, y: groundLevel + 1, type: "ground" });
+      }
+    }
+  };
+
+  for (let winStart = 0; winStart <= LEVEL_WIDTH - WINDOW_SIZE; winStart++) {
+    const obstacleCols: number[] = [];
+    for (let c = winStart; c < winStart + WINDOW_SIZE; c++) {
+      if (isObstacleColumn(c)) {
+        obstacleCols.push(c);
+      }
+    }
+    while (obstacleCols.length > MAX_OBSTACLES_PER_WINDOW) {
+      const col = obstacleCols.pop()!;
+      removeObstacleAt(col);
+    }
+  }
+
+  const LOW_PLATFORM_THRESHOLD = 4;
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (t.type !== "platform") continue;
+    const heightAboveGround = groundLevel - t.y;
+    if (heightAboveGround >= LOW_PLATFORM_THRESHOLD) continue;
+    const platStart = t.x;
+    const platEnd = t.x + (t.width ?? 1) - 1;
+    let overlapsObstacle = false;
+    for (const obs of tiles) {
+      if (obs.type !== "kill" && obs.type !== "spike") continue;
+      const obsStart = obs.x - 1;
+      const obsEnd = obs.x + (obs.width ?? 1);
+      if (platEnd < obsStart || platStart > obsEnd) continue;
+      if (obs.y > t.y) {
+        overlapsObstacle = true;
+        break;
+      }
+    }
+    if (overlapsObstacle) {
+      tiles.splice(i, 1);
+    }
+  }
+
+  const MIN_PLATFORM_CLEARANCE = 3;
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const t = tiles[i];
+    if (t.type !== "platform") continue;
+    const platStart = t.x;
+    const platEnd = t.x + (t.width ?? 1) - 1;
+    let highestObstacleY: number | null = null;
+    for (const obs of tiles) {
+      if (obs.type !== "kill" && obs.type !== "spike") continue;
+      const obsStart = obs.x - 1;
+      const obsEnd = obs.x + (obs.width ?? 1);
+      if (platEnd < obsStart || platStart > obsEnd) continue;
+      if (obs.y > t.y) {
+        if (highestObstacleY === null || obs.y < highestObstacleY) {
+          highestObstacleY = obs.y;
+        }
+      }
+    }
+    if (highestObstacleY !== null) {
+      const clearance = highestObstacleY - t.y;
+      if (clearance < MIN_PLATFORM_CLEARANCE) {
+        const newY = highestObstacleY - MIN_PLATFORM_CLEARANCE;
+        if (newY >= 1) {
+          tiles[i] = { ...t, y: newY };
+        } else {
+          tiles.splice(i, 1);
         }
       }
     }
@@ -382,7 +600,7 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
     return true;
   });
-  return filtered.filter(t => {
+  const finalTiles = filtered.filter(t => {
     if (t.type === "ground" && t.y === groundLevel && quicksandColumns.has(t.x)) {
       return false;
     }
@@ -391,4 +609,6 @@ export function generateLevel(worldIndex: number): LevelTile[] {
     }
     return true;
   });
+
+  return finalTiles;
 }

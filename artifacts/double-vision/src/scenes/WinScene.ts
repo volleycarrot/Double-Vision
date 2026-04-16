@@ -1,11 +1,15 @@
 import Phaser from "phaser";
+import type { GameMode } from "./ModeSelectScene";
 
 export class WinScene extends Phaser.Scene {
   constructor() {
     super({ key: "WinScene" });
   }
 
-  create(data: { deaths: number; startTime: number }) {
+  private gameMode: GameMode = "multiplayer";
+
+  create(data: { deaths: number; startTime: number; gameMode?: GameMode }) {
+    this.gameMode = data?.gameMode || "multiplayer";
     const { width, height } = this.scale;
     const elapsed = Math.floor((Date.now() - data.startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);
@@ -66,7 +70,7 @@ export class WinScene extends Phaser.Scene {
       });
     }
 
-    const prompt = this.add.text(width / 2, height * 0.85, "Press ENTER to Restart", {
+    const prompt = this.add.text(width / 2, height * 0.85, "Press ENTER to Continue", {
       fontSize: "18px",
       fontFamily: "monospace",
       color: "#ffffff",
@@ -82,7 +86,7 @@ export class WinScene extends Phaser.Scene {
     });
 
     this.input.keyboard!.once("keydown-ENTER", () => {
-      this.scene.start("TitleScene");
+      this.scene.start("TitleScene", { gameMode: this.gameMode });
     });
   }
 }
