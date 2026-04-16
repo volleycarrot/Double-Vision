@@ -342,8 +342,11 @@ function _drawAccessoryById(
     }
     case "medal": {
       const medalY = centerY + bodyHeight * 0.1;
+      const ribbonHalfWidth = bodyWidth / 2;
+      const ribbonTopY = topY + 4 + (medalY - (topY + 4)) * 0.75;
       gfx.lineStyle(2, 0x4444ff, 0.8);
-      gfx.lineBetween(centerX, topY + 4, centerX, medalY);
+      gfx.lineBetween(centerX - ribbonHalfWidth, ribbonTopY, centerX, medalY);
+      gfx.lineBetween(centerX + ribbonHalfWidth, ribbonTopY, centerX, medalY);
       gfx.fillStyle(0xffd700, 1);
       gfx.fillCircle(centerX, medalY + 5, 7);
       gfx.fillStyle(0xffaa00, 1);
