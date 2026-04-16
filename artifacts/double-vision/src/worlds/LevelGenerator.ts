@@ -5,6 +5,7 @@ export interface LevelTile {
   y: number;
   type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint" | "cave" | "secret";
   width?: number;
+  dir?: "left" | "right" | "up" | "down";
 }
 
 function seededRandom(seed: number) {

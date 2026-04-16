@@ -6,8 +6,8 @@ import type { GameMode } from "./ModeSelectScene";
 import { getBindings, getKeyName, setBinding, resetBindings, isReservedKey, isArrowNavKey, isLetterKey, type ControlBindings } from "../KeyBindings";
 import { getBgColor, getSettings, setMusicEnabled, setBgColorIndex, BG_PRESETS, getInputMode, setInputMode, getControlsFlipped, setControlsFlipped, type InputMode } from "../GameSettings";
 import { toggleMusic } from "../MusicManager";
-import { onlineManager } from "../OnlineMultiplayerManager";
-import { isLoggedIn, getUsername, logout } from "../AuthManager";
+import { onlineManager, type CustomMapData } from "../OnlineMultiplayerManager";
+import { isLoggedIn, getUsername, logout, apiRequest } from "../AuthManager";
 import { getStats } from "../StatsManager";
 
 export class TitleScene extends Phaser.Scene {
@@ -25,6 +25,12 @@ export class TitleScene extends Phaser.Scene {
   private statsOverlay: Phaser.GameObjects.Rectangle | null = null;
   private statsModalBg: Phaser.GameObjects.Rectangle | null = null;
   private statsDynamicObjects: Phaser.GameObjects.GameObject[] = [];
+  private myMapsOpen = false;
+  private myMapsOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private myMapsModalBg: Phaser.GameObjects.Rectangle | null = null;
+  private myMapsDynamicObjects: Phaser.GameObjects.GameObject[] = [];
+  private myMapsPage = 0;
+  private myMapsData: { id: number; name: string; tileData: string; bgColor: string; groundColor: string; platformColor: string }[] = [];
 
   constructor() {
     super({ key: "TitleScene" });
@@ -45,6 +51,10 @@ export class TitleScene extends Phaser.Scene {
     this.statsOverlay = null;
     this.statsModalBg = null;
     this.statsDynamicObjects = [];
+    this.myMapsOpen = false;
+    this.myMapsOverlay = null;
+    this.myMapsModalBg = null;
+    this.myMapsDynamicObjects = [];
 
     const { width, height } = this.scale;
     const progress = loadProgress();
@@ -170,12 +180,12 @@ export class TitleScene extends Phaser.Scene {
 
       const pending = onlineManager.consumePendingWorld();
       if (pending !== null) {
-        this.startWorld(pending.worldIndex, pending.seed);
+        this.startWorld(pending.worldIndex, pending.seed, pending.customMapData);
         return;
       }
 
-      onlineManager.on("world_selected", (msg: any) => {
-        this.startWorld(msg.worldIndex, msg.seed);
+      onlineManager.on("world_selected", (msg: Record<string, unknown>) => {
+        this.startWorld(msg.worldIndex as number, msg.seed as number, msg.customMapData as CustomMapData | undefined);
       });
       onlineManager.on("partner_disconnected", () => {
         onlineManager.disconnect();
@@ -243,6 +253,79 @@ export class TitleScene extends Phaser.Scene {
           this.startWorld(i);
         });
       });
+
+      const customBtnH = 36;
+      const customBtnGap = 8;
+      const customBtnY = galleryTop + 28 + WORLDS.length * (btnH + btnGap) + 4;
+
+      const createBtnBg = this.add.rectangle(galleryX + btnW / 2, customBtnY + customBtnH / 2, btnW, customBtnH, 0x16213e, 0.9);
+      createBtnBg.setStrokeStyle(2, isLoggedIn() ? 0x0f3460 : 0x333333);
+
+      this.add.text(galleryX + 14, customBtnY + customBtnH / 2, "🔧", {
+        fontSize: "14px",
+      }).setOrigin(0.5, 0.5);
+
+      const createLabel = this.add.text(galleryX + 30, customBtnY + customBtnH / 2, isLoggedIn() ? "Create Map" : "Create Map (log in)", {
+        fontSize: "12px",
+        fontFamily: "monospace",
+        color: isLoggedIn() ? "#cccccc" : "#666666",
+      }).setOrigin(0, 0.5);
+
+      if (isLoggedIn()) {
+        createBtnBg.setInteractive({ useHandCursor: true });
+        createBtnBg.on("pointerover", () => {
+          createBtnBg.setFillStyle(0x1e2d4a, 1);
+          createLabel.setColor("#ffffff");
+        });
+        createBtnBg.on("pointerout", () => {
+          createBtnBg.setFillStyle(0x16213e, 0.9);
+          createLabel.setColor("#cccccc");
+        });
+        createBtnBg.on("pointerdown", () => {
+          if (this.settingsOpen || this.myMapsOpen) return;
+          this.scene.start("MapEditorScene", { gameMode: this.gameMode });
+        });
+      } else {
+        createBtnBg.setInteractive();
+        createBtnBg.on("pointerdown", () => {
+          this.showError("Log in to create maps");
+        });
+      }
+
+      const myMapsBtnY = customBtnY + customBtnH + customBtnGap;
+      const myMapsBtnBg = this.add.rectangle(galleryX + btnW / 2, myMapsBtnY + customBtnH / 2, btnW, customBtnH, 0x16213e, 0.9);
+      myMapsBtnBg.setStrokeStyle(2, isLoggedIn() ? 0x0f3460 : 0x333333);
+
+      this.add.text(galleryX + 14, myMapsBtnY + customBtnH / 2, "📁", {
+        fontSize: "14px",
+      }).setOrigin(0.5, 0.5);
+
+      const myMapsLabel = this.add.text(galleryX + 30, myMapsBtnY + customBtnH / 2, isLoggedIn() ? "My Maps" : "My Maps (log in)", {
+        fontSize: "12px",
+        fontFamily: "monospace",
+        color: isLoggedIn() ? "#cccccc" : "#666666",
+      }).setOrigin(0, 0.5);
+
+      if (isLoggedIn()) {
+        myMapsBtnBg.setInteractive({ useHandCursor: true });
+        myMapsBtnBg.on("pointerover", () => {
+          myMapsBtnBg.setFillStyle(0x1e2d4a, 1);
+          myMapsLabel.setColor("#ffffff");
+        });
+        myMapsBtnBg.on("pointerout", () => {
+          myMapsBtnBg.setFillStyle(0x16213e, 0.9);
+          myMapsLabel.setColor("#cccccc");
+        });
+        myMapsBtnBg.on("pointerdown", () => {
+          if (this.settingsOpen || this.myMapsOpen) return;
+          this.openMyMaps();
+        });
+      } else {
+        myMapsBtnBg.setInteractive();
+        myMapsBtnBg.on("pointerdown", () => {
+          this.showError("Log in to view your maps");
+        });
+      }
     }
 
     const enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
@@ -266,6 +349,10 @@ export class TitleScene extends Phaser.Scene {
 
     const escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     escKey.on("down", () => {
+      if (this.myMapsOpen) {
+        this.closeMyMaps();
+        return;
+      }
       if (this.statsOpen) {
         this.closeStats();
         return;
@@ -328,8 +415,18 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
-  private startWorld(worldIndex: number, seed?: number) {
-    this.scene.start("WarningScene", { worldIndex, deaths: 0, startTime: Date.now(), gameMode: this.gameMode, levelSeed: seed });
+  private startWorld(worldIndex: number, seed?: number, customMapData?: CustomMapData) {
+    this.scene.start("WarningScene", {
+      worldIndex,
+      deaths: 0,
+      startTime: Date.now(),
+      gameMode: this.gameMode,
+      levelSeed: seed,
+      customTiles: customMapData?.tiles,
+      customBgColor: customMapData?.bgColor,
+      customGroundColor: customMapData?.groundColor,
+      customPlatformColor: customMapData?.platformColor,
+    });
   }
 
   private renderControlsBox(leftCenterX: number, height: number) {
@@ -713,6 +810,269 @@ export class TitleScene extends Phaser.Scene {
       this.statsModalBg.destroy();
       this.statsModalBg = null;
     }
+  }
+
+  private async openMyMaps() {
+    this.myMapsOpen = true;
+    const { width, height } = this.scale;
+    const modalW = 420;
+    const modalH = 360;
+    const modalX = width / 2;
+    const modalY = height / 2;
+
+    this.myMapsOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+    this.myMapsOverlay.setInteractive();
+
+    this.myMapsModalBg = this.add.rectangle(modalX, modalY, modalW, modalH, getBgColor().hex, 1);
+    this.myMapsModalBg.setStrokeStyle(2, 0xe94560);
+
+    this.renderMyMapsHeader(modalX, modalY, modalW, modalH);
+
+    const loadingText = this.add.text(modalX, modalY, "Loading...", {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#aaaaaa",
+    }).setOrigin(0.5);
+    this.myMapsDynamicObjects.push(loadingText);
+
+    try {
+      const res = await apiRequest("/user/maps");
+      if (!res.ok) {
+        loadingText.setText("Failed to load maps");
+        return;
+      }
+      const data = await res.json();
+      this.myMapsData = data.maps || [];
+      this.myMapsPage = 0;
+      this.renderMyMapsPage(modalX, modalY, modalW, modalH);
+    } catch {
+      loadingText.setText("Network error");
+    }
+  }
+
+  private renderMyMapsHeader(modalX: number, modalY: number, modalW: number, modalH: number) {
+    const titleText = this.add.text(modalX, modalY - modalH / 2 + 24, "MY MAPS", {
+      fontSize: "20px", fontFamily: "monospace", color: "#e94560", fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.myMapsDynamicObjects.push(titleText);
+
+    const closeBtnBg = this.add.rectangle(modalX + modalW / 2 - 18, modalY - modalH / 2 + 18, 28, 28, 0xe94560, 1).setStrokeStyle(1, 0xffffff).setDepth(50).setInteractive({ useHandCursor: true });
+    const closeBtn = this.add.text(modalX + modalW / 2 - 18, modalY - modalH / 2 + 18, "\u2715", {
+      fontSize: "18px", fontFamily: "monospace", color: "#ffffff", fontStyle: "bold",
+    }).setOrigin(0.5).setDepth(51);
+    this.myMapsDynamicObjects.push(closeBtnBg);
+    this.myMapsDynamicObjects.push(closeBtn);
+    closeBtnBg.on("pointerover", () => closeBtnBg.setFillStyle(0xff6680));
+    closeBtnBg.on("pointerout", () => closeBtnBg.setFillStyle(0xe94560));
+    closeBtnBg.on("pointerdown", () => this.closeMyMaps());
+  }
+
+  private renderMyMapsPage(modalX: number, modalY: number, modalW: number, modalH: number) {
+    this.myMapsDynamicObjects.forEach(obj => obj.destroy());
+    this.myMapsDynamicObjects = [];
+
+    this.renderMyMapsHeader(modalX, modalY, modalW, modalH);
+
+    const maps = this.myMapsData;
+
+    if (maps.length === 0) {
+      const emptyText = this.add.text(modalX, modalY, "No saved maps yet.\nCreate one with the Create Map button!", {
+        fontSize: "13px", fontFamily: "monospace", color: "#888888", align: "center",
+      }).setOrigin(0.5);
+      this.myMapsDynamicObjects.push(emptyText);
+      return;
+    }
+
+    const perPage = 6;
+    const totalPages = Math.ceil(maps.length / perPage);
+    const page = this.myMapsPage;
+    const startIdx = page * perPage;
+    const endIdx = Math.min(startIdx + perPage, maps.length);
+
+    const rowH = 44;
+    const listStartY = modalY - modalH / 2 + 56;
+
+    for (let i = startIdx; i < endIdx; i++) {
+      const map = maps[i];
+      const row = i - startIdx;
+      const ry = listStartY + row * rowH;
+
+      const rowBg = this.add.rectangle(modalX, ry + rowH / 2, modalW - 30, rowH - 4, 0x16213e, 0.8);
+      rowBg.setStrokeStyle(1, 0x0f3460);
+      this.myMapsDynamicObjects.push(rowBg);
+
+      const nameText = this.add.text(modalX - modalW / 2 + 30, ry + rowH / 2, map.name, {
+        fontSize: "13px",
+        fontFamily: "monospace",
+        color: "#cccccc",
+      }).setOrigin(0, 0.5);
+      this.myMapsDynamicObjects.push(nameText);
+
+      const playBtn = this.add.text(modalX + modalW / 2 - 40, ry + rowH / 2 - 8, "▶", {
+        fontSize: "16px",
+        fontFamily: "monospace",
+        color: "#00ff88",
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      this.myMapsDynamicObjects.push(playBtn);
+
+      playBtn.on("pointerover", () => playBtn.setColor("#ffffff"));
+      playBtn.on("pointerout", () => playBtn.setColor("#00ff88"));
+      playBtn.on("pointerdown", () => {
+        this.playCustomMap(map.id);
+      });
+
+      const editBtn = this.add.text(modalX + modalW / 2 - 70, ry + rowH / 2 - 8, "✎", {
+        fontSize: "16px",
+        fontFamily: "monospace",
+        color: "#ffcc00",
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      this.myMapsDynamicObjects.push(editBtn);
+
+      editBtn.on("pointerover", () => editBtn.setColor("#ffffff"));
+      editBtn.on("pointerout", () => editBtn.setColor("#ffcc00"));
+      editBtn.on("pointerdown", () => {
+        this.editCustomMap(map.id);
+      });
+
+      const delBtn = this.add.text(modalX + modalW / 2 - 100, ry + rowH / 2 - 8, "✕", {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#ff4444",
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      this.myMapsDynamicObjects.push(delBtn);
+
+      delBtn.on("pointerover", () => delBtn.setColor("#ffffff"));
+      delBtn.on("pointerout", () => delBtn.setColor("#ff4444"));
+      delBtn.on("pointerdown", async () => {
+        const confirmed = window.confirm(`Delete "${map.name}"?`);
+        if (!confirmed) return;
+        try {
+          await apiRequest(`/user/maps/${map.id}`, { method: "DELETE" });
+          this.myMapsData = this.myMapsData.filter(m => m.id !== map.id);
+          if (this.myMapsPage > 0 && this.myMapsPage * perPage >= this.myMapsData.length) {
+            this.myMapsPage--;
+          }
+          this.renderMyMapsPage(modalX, modalY, modalW, modalH);
+        } catch {}
+      });
+
+      const actionLabels = this.add.text(modalX + modalW / 2 - 70, ry + rowH / 2 + 10, "del  edit  play", {
+        fontSize: "8px",
+        fontFamily: "monospace",
+        color: "#666666",
+      }).setOrigin(0.5);
+      this.myMapsDynamicObjects.push(actionLabels);
+    }
+
+    if (totalPages > 1) {
+      const navY = listStartY + perPage * rowH + 10;
+
+      const pageText = this.add.text(modalX, navY, `Page ${page + 1} of ${totalPages}`, {
+        fontSize: "11px",
+        fontFamily: "monospace",
+        color: "#aaaaaa",
+      }).setOrigin(0.5);
+      this.myMapsDynamicObjects.push(pageText);
+
+      if (page > 0) {
+        const prevBtn = this.add.text(modalX - 80, navY, "< Prev", {
+          fontSize: "12px",
+          fontFamily: "monospace",
+          color: "#88aaff",
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        this.myMapsDynamicObjects.push(prevBtn);
+        prevBtn.on("pointerover", () => prevBtn.setColor("#ffffff"));
+        prevBtn.on("pointerout", () => prevBtn.setColor("#88aaff"));
+        prevBtn.on("pointerdown", () => {
+          this.myMapsPage--;
+          this.renderMyMapsPage(modalX, modalY, modalW, modalH);
+        });
+      }
+
+      if (page < totalPages - 1) {
+        const nextBtn = this.add.text(modalX + 80, navY, "Next >", {
+          fontSize: "12px",
+          fontFamily: "monospace",
+          color: "#88aaff",
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        this.myMapsDynamicObjects.push(nextBtn);
+        nextBtn.on("pointerover", () => nextBtn.setColor("#ffffff"));
+        nextBtn.on("pointerout", () => nextBtn.setColor("#88aaff"));
+        nextBtn.on("pointerdown", () => {
+          this.myMapsPage++;
+          this.renderMyMapsPage(modalX, modalY, modalW, modalH);
+        });
+      }
+    }
+  }
+
+  private closeMyMaps() {
+    this.myMapsOpen = false;
+    this.myMapsDynamicObjects.forEach(obj => obj.destroy());
+    this.myMapsDynamicObjects = [];
+    if (this.myMapsOverlay) {
+      this.myMapsOverlay.destroy();
+      this.myMapsOverlay = null;
+    }
+    if (this.myMapsModalBg) {
+      this.myMapsModalBg.destroy();
+      this.myMapsModalBg = null;
+    }
+  }
+
+  private async playCustomMap(mapId: number) {
+    try {
+      const res = await apiRequest(`/user/maps/${mapId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const map = data.map;
+      const tiles = JSON.parse(map.tileData);
+      const seed = Math.floor(Math.random() * 2147483646) + 1;
+
+      const customMapPayload = {
+        tiles,
+        bgColor: map.bgColor || "#1a1a2e",
+        groundColor: map.groundColor || "#3a3a3a",
+        platformColor: map.platformColor || "#4a4a4a",
+      };
+
+      if (this.gameMode === "online") {
+        onlineManager.sendWorldSelect(0, seed, customMapPayload);
+      }
+
+      this.closeMyMaps();
+      this.scene.start("WarningScene", {
+        worldIndex: 0,
+        deaths: 0,
+        startTime: Date.now(),
+        gameMode: this.gameMode,
+        levelSeed: seed,
+        customTiles: tiles,
+        customBgColor: map.bgColor,
+        customGroundColor: map.groundColor,
+        customPlatformColor: map.platformColor,
+      });
+    } catch {}
+  }
+
+  private async editCustomMap(mapId: number) {
+    try {
+      const res = await apiRequest(`/user/maps/${mapId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const map = data.map;
+
+      this.closeMyMaps();
+      this.scene.start("MapEditorScene", {
+        gameMode: this.gameMode,
+        mapId: map.id,
+        mapName: map.name,
+        tileData: map.tileData,
+        bgColor: map.bgColor,
+        groundColor: map.groundColor,
+        platformColor: map.platformColor,
+      });
+    } catch {}
   }
 
   private getModalDimensions() {

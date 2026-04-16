@@ -8,7 +8,7 @@ import { drawAccessories } from "../AccessoryManager";
 import { getCoins, addCoins } from "../CoinManager";
 import type { GameMode } from "./ModeSelectScene";
 import { getBindings } from "../KeyBindings";
-import { onlineManager, type RemoteInputs } from "../OnlineMultiplayerManager";
+import { onlineManager, type RemoteInputs, type CustomMapData } from "../OnlineMultiplayerManager";
 import { getSettings, setMusicEnabled, setBgColorIndex, getBgColor, BG_PRESETS, getInputMode } from "../GameSettings";
 import { TouchControls } from "../TouchControls";
 import { toggleMusic, setWorldIndex, startMusic } from "../MusicManager";
@@ -103,13 +103,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private levelSeed?: number;
+  private customTiles?: LevelTile[];
+  private customBgColor?: string;
+  private customGroundColor?: string;
+  private customPlatformColor?: string;
+  private customLevelEnd: number = LEVEL_WIDTH;
 
-  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode; levelSeed?: number }) {
+  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode; levelSeed?: number; customTiles?: LevelTile[]; customBgColor?: string; customGroundColor?: string; customPlatformColor?: string }) {
     this.worldIndex = data.worldIndex;
     this.deaths = data.deaths;
     this.startTime = data.startTime;
     this.gameMode = data.gameMode || "multiplayer";
     this.levelSeed = data.levelSeed;
+    this.customTiles = data.customTiles;
+    this.customBgColor = data.customBgColor;
+    this.customGroundColor = data.customGroundColor;
+    this.customPlatformColor = data.customPlatformColor;
     this.isDead = false;
 
     setWorldIndex(this.worldIndex);
@@ -158,7 +167,12 @@ export class GameScene extends Phaser.Scene {
     }
     this.beachLayers = [];
 
-    const world = WORLDS[this.worldIndex];
+    const world = this.customTiles ? {
+      ...WORLDS[this.worldIndex],
+      bgColor: this.customBgColor ? parseInt(this.customBgColor.replace("#", ""), 16) : WORLDS[this.worldIndex].bgColor,
+      groundColor: this.customGroundColor ? parseInt(this.customGroundColor.replace("#", ""), 16) : WORLDS[this.worldIndex].groundColor,
+      platformColor: this.customPlatformColor ? parseInt(this.customPlatformColor.replace("#", ""), 16) : WORLDS[this.worldIndex].platformColor,
+    } : WORLDS[this.worldIndex];
 
     this.cameras.main.setBackgroundColor(Phaser.Display.Color.IntegerToColor(world.bgColor).rgba);
 
@@ -170,11 +184,47 @@ export class GameScene extends Phaser.Scene {
     this.caveGroup = this.physics.add.staticGroup();
     this.secretGroup = this.physics.add.staticGroup();
 
-    const levelTiles = generateLevel(this.worldIndex, this.levelSeed);
+    const levelTiles = this.customTiles || generateLevel(this.worldIndex, this.levelSeed);
+    if (this.customTiles) {
+      let maxCol = 30;
+      for (const tile of this.customTiles) {
+        const right = tile.x + (tile.width || 1);
+        if (right > maxCol) maxCol = right;
+      }
+      this.customLevelEnd = Math.min(maxCol + 3, LEVEL_WIDTH);
+    } else {
+      this.customLevelEnd = LEVEL_WIDTH;
+    }
     this.buildLevel(levelTiles, world);
 
-    const spawnX = 3 * TILE;
-    const spawnY = (12 - 2) * TILE;
+    let spawnX = 3 * TILE;
+    let spawnY = (12 - 2) * TILE;
+
+    if (this.customTiles) {
+      let leftmostCol = Number.POSITIVE_INFINITY;
+      let topRowAtLeftmost = Number.POSITIVE_INFINITY;
+      for (const tile of this.customTiles) {
+        if (tile.type !== "ground" && tile.type !== "platform") continue;
+        const startCol = tile.x;
+        const endCol = tile.x + (tile.width ?? 1) - 1;
+        if (startCol < leftmostCol) {
+          leftmostCol = startCol;
+          topRowAtLeftmost = tile.y;
+        } else if (startCol === leftmostCol && tile.y < topRowAtLeftmost) {
+          topRowAtLeftmost = tile.y;
+        }
+        for (let c = startCol; c <= endCol; c++) {
+          if (c === leftmostCol && tile.y < topRowAtLeftmost) {
+            topRowAtLeftmost = tile.y;
+          }
+        }
+      }
+      if (Number.isFinite(leftmostCol)) {
+        spawnX = leftmostCol * TILE + TILE / 2;
+        spawnY = (topRowAtLeftmost - 1) * TILE;
+      }
+    }
+
     this.lastCheckpointX = spawnX;
     this.lastCheckpointY = spawnY;
 
@@ -203,9 +253,16 @@ export class GameScene extends Phaser.Scene {
       if (s.visible) this.handleDeath();
     }, undefined, this);
 
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-    this.cameras.main.setBounds(0, 0, LEVEL_WIDTH * TILE, 15 * TILE);
-    this.physics.world.setBounds(0, 0, LEVEL_WIDTH * TILE, 20 * TILE);
+    const levelPixelWidth = this.customLevelEnd * TILE;
+    if (this.customTiles && levelPixelWidth <= this.cameras.main.width) {
+      this.cameras.main.stopFollow();
+      this.cameras.main.scrollX = 0;
+      this.cameras.main.scrollY = 0;
+    } else {
+      this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    }
+    this.cameras.main.setBounds(0, 0, levelPixelWidth, 15 * TILE);
+    this.physics.world.setBounds(0, 0, levelPixelWidth, 20 * TILE);
 
     const bindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
     const bindings = getBindings(bindingsMode);
@@ -246,8 +303,15 @@ export class GameScene extends Phaser.Scene {
           }
         });
 
-        onlineManager.on("world_selected", (msg: any) => {
-          this.restartWorld(true, msg.seed);
+        onlineManager.on("world_selected", (msg: Record<string, unknown>) => {
+          const customMapData = msg.customMapData as CustomMapData | undefined;
+          if (customMapData) {
+            this.customTiles = customMapData.tiles;
+            this.customBgColor = customMapData.bgColor;
+            this.customGroundColor = customMapData.groundColor;
+            this.customPlatformColor = customMapData.platformColor;
+          }
+          this.restartWorld(true, msg.seed as number);
         });
 
       }
@@ -308,7 +372,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    this.worldText = this.add.text(16, 16, world.name, {
+    this.worldText = this.add.text(16, 16, this.customTiles ? "Custom Map" : world.name, {
       fontSize: "16px",
       fontFamily: "monospace",
       color: "#ffffff",
@@ -344,35 +408,42 @@ export class GameScene extends Phaser.Scene {
       }).setScrollFactor(0).setDepth(100).setOrigin(0, 0);
     }
 
-    if (this.worldIndex === 3) {
+    if (this.worldIndex === 3 && !this.customTiles) {
       this.bullets = this.physics.add.group({ allowGravity: false });
       this.physics.add.overlap(this.player, this.bullets, () => this.handleDeath(), undefined, this);
     }
 
-    if (this.worldIndex === 0) {
-      this.lavaSplashGfx = this.add.graphics();
-      this.lavaBackground = createLavaBackground(this);
-    }
+    if (!this.customTiles) {
+      if (this.worldIndex === 0) {
+        this.lavaSplashGfx = this.add.graphics();
+        this.lavaBackground = createLavaBackground(this);
+      }
 
-    if (this.worldIndex === 1) {
-      this.oceanGfx = this.add.graphics().setDepth(55).setScrollFactor(0);
-      this.beachLayers = createBeachBackground(this);
+      if (this.worldIndex === 1) {
+        this.oceanGfx = this.add.graphics().setDepth(55).setScrollFactor(0);
+        this.beachLayers = createBeachBackground(this);
+      } else {
+        this.beachLayers = [];
+      }
+
+      if (this.worldIndex === 2) {
+        this.jungleLayers = createJungleBackground(this);
+      } else {
+        this.jungleLayers = [];
+      }
+
+      if (this.worldIndex === 3) {
+        this.warZoneBackground = createWarZoneBackground(this);
+      }
     } else {
       this.beachLayers = [];
-    }
-
-    if (this.worldIndex === 2) {
-      this.jungleLayers = createJungleBackground(this);
-    } else {
       this.jungleLayers = [];
     }
 
-    if (this.worldIndex === 3) {
-      this.warZoneBackground = createWarZoneBackground(this);
-    }
-
     this.coinGroup = this.physics.add.group({ allowGravity: false });
-    this.spawnCoins(levelTiles);
+    if (!this.customTiles) {
+      this.spawnCoins(levelTiles);
+    }
     this.physics.add.overlap(this.player, this.coinGroup, (_p, coin) => {
       const c = coin as Phaser.GameObjects.Rectangle;
       const g = this.coinGfxMap.get(c);
@@ -445,7 +516,20 @@ export class GameScene extends Phaser.Scene {
   private buildLevel(tiles: LevelTile[], world: typeof WORLDS[0]) {
     const checkpointSpacing = Math.floor(LEVEL_WIDTH / (CHECKPOINT_COUNT + 1));
 
-    tiles.forEach((tile) => {
+    const perCellTypes = new Set<string>(["ground", "platform", "kill", "spike", "checkpoint"]);
+    const expandedTiles: LevelTile[] = [];
+    for (const tile of tiles) {
+      const w = tile.width ?? 1;
+      if (w <= 1 || !perCellTypes.has(tile.type)) {
+        expandedTiles.push(tile);
+      } else {
+        for (let dx = 0; dx < w; dx++) {
+          expandedTiles.push({ x: tile.x + dx, y: tile.y, type: tile.type });
+        }
+      }
+    }
+
+    expandedTiles.forEach((tile) => {
       const px = tile.x * TILE + TILE / 2;
       const py = tile.y * TILE + TILE / 2;
 
@@ -457,7 +541,12 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case "platform": {
-          if (this.worldIndex === 0) {
+          if (this.customTiles) {
+            const p = this.add.rectangle(px, py, TILE, TILE, world.platformColor);
+            p.setStrokeStyle(1, 0x333333);
+            this.platformGroup.add(p);
+            (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+          } else if (this.worldIndex === 0) {
             const halfT = TILE / 2;
             const radius = 6;
             const maskGfx = this.add.graphics();
@@ -504,26 +593,35 @@ export class GameScene extends Phaser.Scene {
             (p.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
           }
 
-          const halfT = TILE / 2;
-          if (this.worldIndex === 2) {
-            const gfx = this.add.graphics();
-            gfx.lineStyle(1, 0x3a1a00, 0.3);
-            for (let i = 0; i < 3; i++) {
-              const ly = py - halfT + 6 + i * 9;
+          if (!this.customTiles) {
+            const halfT = TILE / 2;
+            if (this.worldIndex === 2) {
+              const gfx = this.add.graphics();
+              gfx.lineStyle(1, 0x3a1a00, 0.3);
+              for (let i = 0; i < 3; i++) {
+                const ly = py - halfT + 6 + i * 9;
+                gfx.beginPath();
+                gfx.moveTo(px - halfT + 2, ly);
+                gfx.lineTo(px + halfT - 2, ly + 2);
+                gfx.strokePath();
+              }
+              gfx.lineStyle(1, 0x5c3a1a, 0.2);
               gfx.beginPath();
-              gfx.moveTo(px - halfT + 2, ly);
-              gfx.lineTo(px + halfT - 2, ly + 2);
+              gfx.moveTo(px - halfT + 8, py - halfT + 2);
+              gfx.lineTo(px - halfT + 10, py + halfT - 2);
               gfx.strokePath();
             }
-            gfx.lineStyle(1, 0x5c3a1a, 0.2);
-            gfx.beginPath();
-            gfx.moveTo(px - halfT + 8, py - halfT + 2);
-            gfx.lineTo(px - halfT + 10, py + halfT - 2);
-            gfx.strokePath();
           }
           break;
         }
         case "kill": {
+          if (this.customTiles) {
+            const k = this.add.rectangle(px, py, TILE, TILE, 0xff8800);
+            k.setStrokeStyle(2, 0xffff00, 0.4);
+            this.killGroup.add(k);
+            (k.body as Phaser.Physics.Arcade.StaticBody).setSize(TILE, TILE);
+            break;
+          }
           if (this.worldIndex === 1) {
             const finGfx = this.add.graphics();
             finGfx.fillStyle(0x555555, 1);
@@ -606,11 +704,11 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case "spike": {
-          this.createSpike(px, py, world);
+          this.createSpike(px, py, world, tile.dir);
           break;
         }
         case "movement": {
-          this.createMovement(px, py, world, tile.x, tile.width ?? 1);
+          this.createMovement(px, py, world, tile.x, tile.width ?? 1, tile.dir);
           break;
         }
         case "cave": {
@@ -777,8 +875,7 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case "checkpoint": {
-          const groundSurfaceY = (LEVEL_HEIGHT - 2) * TILE;
-          const flagY = groundSurfaceY - 20;
+          const flagY = this.customTiles ? py : (LEVEL_HEIGHT - 2) * TILE - 20;
           const container = this.add.container(px, flagY);
           const pole = this.add.rectangle(0, 8, 4, 40, 0xcccccc);
           const flag = this.add.triangle(6, -4, 0, 0, 0, 16, 16, 8, world.checkpointColor);
@@ -790,7 +887,37 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private createSpike(px: number, py: number, world: typeof WORLDS[0]) {
+  private createSpike(px: number, py: number, world: typeof WORLDS[0], dirField?: "left" | "right" | "up" | "down") {
+    if (this.customTiles) {
+      const halfT = TILE / 2;
+      const spikeGfx = this.add.graphics();
+      const dir = dirField || "up";
+      spikeGfx.fillStyle(0xdd0000, 1);
+      spikeGfx.fillStyle(0xdd0000, 1);
+      let p1x = 0, p1y = 0, p2x = 0, p2y = 0, p3x = 0, p3y = 0;
+      if (dir === "up") {
+        p1x = px - halfT + 2; p1y = py + halfT;
+        p2x = px;             p2y = py - halfT + 4;
+        p3x = px + halfT - 2; p3y = py + halfT;
+      } else if (dir === "down") {
+        p1x = px - halfT + 2; p1y = py - halfT;
+        p2x = px;             p2y = py + halfT - 4;
+        p3x = px + halfT - 2; p3y = py - halfT;
+      } else if (dir === "left") {
+        p1x = px + halfT;     p1y = py - halfT + 2;
+        p2x = px - halfT + 4; p2y = py;
+        p3x = px + halfT;     p3y = py + halfT - 2;
+      } else {
+        p1x = px - halfT;     p1y = py - halfT + 2;
+        p2x = px + halfT - 4; p2y = py;
+        p3x = px - halfT;     p3y = py + halfT - 2;
+      }
+      spikeGfx.fillTriangle(p1x, p1y, p2x, p2y, p3x, p3y);
+      const spikeHit = this.add.rectangle(px, py, TILE - 4, TILE - 4, 0x000000, 0);
+      this.spikeGroup.add(spikeHit);
+      (spikeHit.body as Phaser.Physics.Arcade.Body).setSize(TILE - 4, TILE - 4);
+      return;
+    }
     switch (this.worldIndex) {
       case 0: {
         const groundY = py + TILE / 2;
@@ -882,7 +1009,30 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private createMovement(px: number, py: number, world: typeof WORLDS[0], tileX: number, tileWidth: number = 1) {
+  private createMovement(px: number, py: number, world: typeof WORLDS[0], tileX: number, tileWidth: number = 1, dirField?: "left" | "right" | "up" | "down") {
+    if (this.customTiles) {
+      const conveyorW = TILE * tileWidth;
+      const centerX = px + (tileWidth - 1) * TILE / 2;
+      const dir = dirField === "left" ? -1 : 1;
+      const slide = this.add.rectangle(centerX, py, conveyorW, TILE / 2, 0x6b4226);
+      slide.setStrokeStyle(2, 0x4a2e18);
+      this.movementGroup.add(slide);
+      (slide.body as Phaser.Physics.Arcade.StaticBody).setSize(conveyorW, TILE / 2);
+      const arrowGfx = this.add.graphics();
+      arrowGfx.fillStyle(0xffcc66, 0.9);
+      const arrowY = py;
+      for (let i = 0; i < tileWidth; i++) {
+        const ax = centerX - conveyorW / 2 + (i + 0.5) * TILE;
+        if (dir === 1) {
+          arrowGfx.fillTriangle(ax - 6, arrowY - 5, ax - 6, arrowY + 5, ax + 6, arrowY);
+        } else {
+          arrowGfx.fillTriangle(ax + 6, arrowY - 5, ax + 6, arrowY + 5, ax - 6, arrowY);
+        }
+      }
+      const gfx = this.add.graphics();
+      this.landslideData.push({ tile: slide, dir, speed: 150, gfx, timer: 0, tileWidth });
+      return;
+    }
     switch (this.worldIndex) {
       case 0: {
         const conveyorH = TILE / 2;
@@ -1217,7 +1367,7 @@ export class GameScene extends Phaser.Scene {
     this.accessoryGfx.clear();
     drawAccessories(this.accessoryGfx, this.player.x, this.player.y, 28, currentHeight, getSelectedColor().fill);
 
-    if (this.player.x > (LEVEL_WIDTH - 3) * TILE) {
+    if (this.player.x > (this.customLevelEnd - 3) * TILE) {
       this.completeWorld();
     }
 
@@ -1854,10 +2004,13 @@ export class GameScene extends Phaser.Scene {
       this.touchControls.hide();
     }
 
-    markWorldCompleted(this.worldIndex, this.deaths);
+    if (!this.customTiles) {
+      markWorldCompleted(this.worldIndex, this.deaths);
+    }
     recordLevelCompletion();
 
-    const baseReward = Math.max(0, 10 - this.deaths);
+    const isCustom = !!this.customTiles;
+    const baseReward = isCustom ? 0 : Math.max(0, 10 - this.deaths);
     const multiplier = this.gameMode === "online" ? 3 : 1;
     const coinReward = baseReward * multiplier;
     if (coinReward > 0) {
@@ -1876,7 +2029,9 @@ export class GameScene extends Phaser.Scene {
       .setDepth(600);
 
     let rewardMsg: string;
-    if (coinReward <= 0) {
+    if (isCustom) {
+      rewardMsg = `Custom Map Complete!\n${this.deaths} death${this.deaths !== 1 ? "s" : ""}`;
+    } else if (coinReward <= 0) {
       rewardMsg = `Level Complete!\nNo bonus coins (${this.deaths} deaths)`;
     } else if (this.gameMode === "online") {
       rewardMsg = `Level Complete!\n+${coinReward} bonus coins (3x co-op!)`;
@@ -1887,7 +2042,7 @@ export class GameScene extends Phaser.Scene {
     const rewardText = this.add.text(cx, cy, rewardMsg, {
       fontFamily: "monospace",
       fontSize: "28px",
-      color: coinReward > 0 ? "#ffd700" : "#cccccc",
+      color: isCustom ? "#88ccff" : (coinReward > 0 ? "#ffd700" : "#cccccc"),
       align: "center",
       stroke: "#000000",
       strokeThickness: 4,
@@ -1896,7 +2051,7 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => {
       overlay.destroy();
       rewardText.destroy();
-      if (allWorldsCompleted()) {
+      if (!isCustom && allWorldsCompleted()) {
         this.scene.start("WinScene", { deaths: this.deaths, startTime: this.startTime, gameMode: this.gameMode });
       } else {
         this.scene.start("TitleScene", { gameMode: this.gameMode });
@@ -2149,9 +2304,25 @@ export class GameScene extends Phaser.Scene {
     let seed = remoteSeed;
     if (this.gameMode === "online" && !fromRemote) {
       seed = Math.floor(Math.random() * 2147483646) + 1;
-      onlineManager.sendWorldSelect(this.worldIndex, seed);
+      const customPayload: CustomMapData | undefined = this.customTiles ? {
+        tiles: this.customTiles,
+        bgColor: this.customBgColor || "#1a1a2e",
+        groundColor: this.customGroundColor || "#3a3a3a",
+        platformColor: this.customPlatformColor || "#4a4a4a",
+      } : undefined;
+      onlineManager.sendWorldSelect(this.worldIndex, seed, customPayload);
     }
-    this.scene.restart({ worldIndex: this.worldIndex, deaths: 0, startTime: Date.now(), gameMode: this.gameMode, levelSeed: seed });
+    this.scene.restart({
+      worldIndex: this.worldIndex,
+      deaths: 0,
+      startTime: Date.now(),
+      gameMode: this.gameMode,
+      levelSeed: seed,
+      customTiles: this.customTiles,
+      customBgColor: this.customBgColor,
+      customGroundColor: this.customGroundColor,
+      customPlatformColor: this.customPlatformColor,
+    });
   }
 
   private goHome() {

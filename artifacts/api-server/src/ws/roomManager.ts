@@ -197,7 +197,11 @@ function handleMessage(ws: WebSocket, raw: string) {
         return;
       }
       if (room.guest && room.guest.readyState === WebSocket.OPEN) {
-        send(room.guest, { type: "world_selected", worldIndex: wi, seed });
+        const payload: Record<string, unknown> = { type: "world_selected", worldIndex: wi, seed };
+        if (msg.customMapData) {
+          payload.customMapData = msg.customMapData;
+        }
+        send(room.guest, payload);
       }
       break;
     }
