@@ -690,10 +690,10 @@ function _drawAccessoryById(
       break;
     }
     case "gold_jacket": {
-      const jx = centerX - bodyWidth / 2 + 2;
-      const jy = centerY - bodyHeight * 0.05;
-      const jw = bodyWidth - 4;
-      const jh = bodyHeight * 0.55;
+      const jw = bodyWidth + 4;
+      const jh = bodyHeight * 0.4;
+      const jx = centerX - jw / 2;
+      const jy = centerY + bodyHeight * 0.05;
       gfx.fillStyle(0xffd700, 1);
       gfx.fillRect(jx, jy, jw, jh);
       gfx.fillStyle(0xffaa00, 1);
