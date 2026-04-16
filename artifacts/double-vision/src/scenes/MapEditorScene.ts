@@ -70,6 +70,9 @@ export class MapEditorScene extends Phaser.Scene {
   private scrollX = 0;
   private paletteButtons: Phaser.GameObjects.Rectangle[] = [];
   private paletteIndicators: Phaser.GameObjects.Rectangle[] = [];
+  private finishBadge: Phaser.GameObjects.Container | null = null;
+  private editorMessage: Phaser.GameObjects.Text | null = null;
+  private editorMessageTimer: Phaser.Time.TimerEvent | null = null;
   private saveStatus: Phaser.GameObjects.Text | null = null;
   private colorPickerObjects: Phaser.GameObjects.GameObject[] = [];
   private bgColorIndex = 0;
@@ -95,6 +98,9 @@ export class MapEditorScene extends Phaser.Scene {
     this.paletteIndicators = [];
     this.colorPickerObjects = [];
     this.saveStatus = null;
+    this.finishBadge = null;
+    this.editorMessage = null;
+    this.editorMessageTimer = null;
 
     attachUnlockToast(this);
 
@@ -192,10 +198,44 @@ export class MapEditorScene extends Phaser.Scene {
       this.grid.delete(key);
     } else {
       const sel = this.selectedPalette as PaletteTile;
+      if (sel.type === "finish") {
+        const existing = this.findFinishKey();
+        if (existing && existing !== key) {
+          this.grid.delete(existing);
+          this.showEditorMessage("Finish flag moved", "#ffcc66");
+        }
+      }
       this.grid.set(key, { type: sel.type, dir: sel.dir });
     }
 
     this.drawTiles();
+    this.updateFinishBadge();
+  }
+
+  private findFinishKey(): string | null {
+    for (const [k, v] of this.grid.entries()) {
+      if (v.type === "finish") return k;
+    }
+    return null;
+  }
+
+  private showEditorMessage(text: string, color: string = "#ffcc66") {
+    if (!this.editorMessage) return;
+    this.editorMessage.setText(text);
+    this.editorMessage.setColor(color);
+    this.editorMessage.setAlpha(1);
+    if (this.editorMessageTimer) {
+      this.editorMessageTimer.remove(false);
+      this.editorMessageTimer = null;
+    }
+    this.editorMessageTimer = this.time.delayedCall(1600, () => {
+      if (this.editorMessage) this.editorMessage.setText("");
+    });
+  }
+
+  private updateFinishBadge() {
+    if (!this.finishBadge) return;
+    this.finishBadge.setVisible(this.findFinishKey() !== null);
   }
 
   private drawGrid() {
@@ -387,6 +427,20 @@ export class MapEditorScene extends Phaser.Scene {
             g.fillRect(bx - 8 + c * cellSize, by - 11 + r * cellSize, cellSize, cellSize);
           }
         }
+
+        const badgeDot = this.add.circle(bx + btnSize / 2 - 4, by - btnSize / 2 + 4, 5, 0x00cc44).setStrokeStyle(1, 0xffffff).setDepth(14);
+        const badgeCheck = this.add.text(bx + btnSize / 2 - 4, by - btnSize / 2 + 4, "✓", {
+          fontSize: "8px", fontFamily: "monospace", color: "#ffffff", fontStyle: "bold",
+        }).setOrigin(0.5).setDepth(15);
+        this.finishBadge = this.add.container(0, 0, [badgeDot, badgeCheck]).setDepth(15);
+        this.finishBadge.setVisible(this.findFinishKey() !== null);
+
+        btn.setData("tooltip", "Only one finish flag allowed per map");
+      }
+
+      const tooltipText = item.type === "finish" ? "Only one finish flag allowed per map" : null;
+      if (tooltipText) {
+        btn.on("pointerover", () => this.showEditorMessage(tooltipText, "#aaccff"));
       }
 
       const label = this.add.text(bx, by + btnSize / 2 + 3, item.label, {
@@ -435,6 +489,14 @@ export class MapEditorScene extends Phaser.Scene {
       fontFamily: "monospace",
       color: "#88ff88",
     }).setOrigin(0.5).setDepth(13);
+
+    this.editorMessage = this.add.text(width / 2, TOOLBAR_HEIGHT + 8, "", {
+      fontSize: "11px",
+      fontFamily: "monospace",
+      color: "#ffcc66",
+      backgroundColor: "#000000aa",
+      padding: { x: 8, y: 3 },
+    }).setOrigin(0.5, 0).setDepth(20);
   }
 
   private buildColorPickers() {
