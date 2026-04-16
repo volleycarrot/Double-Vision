@@ -575,22 +575,22 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private addShopButton(leftCenterX: number, height: number) {
-    const shopX = leftCenterX + 160;
-    const shopY = height * 0.48 - 30;
+    const shopX = leftCenterX;
+    const shopY = height * 0.32;
 
-    const btnWidth = 140;
-    const btnHeight = 48;
+    const btnWidth = 110;
+    const btnHeight = 36;
 
     const shopBg = this.add.rectangle(shopX, shopY, btnWidth, btnHeight, 0x16213e, 0.9);
     shopBg.setStrokeStyle(2, 0x0f3460);
     shopBg.setInteractive({ useHandCursor: true });
 
-    const shopIcon = this.add.text(shopX - 30, shopY, "🛒", {
-      fontSize: "24px",
+    const shopIcon = this.add.text(shopX - 24, shopY, "🛒", {
+      fontSize: "18px",
     }).setOrigin(0.5);
 
-    const shopLabel = this.add.text(shopX + 14, shopY, "Shop", {
-      fontSize: "18px",
+    const shopLabel = this.add.text(shopX + 10, shopY, "Shop", {
+      fontSize: "14px",
       fontFamily: "Arial, sans-serif",
       color: "#e0e0e0",
       fontStyle: "bold",
