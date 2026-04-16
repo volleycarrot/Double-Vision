@@ -13,12 +13,24 @@ export interface TouchInputState {
 
 type Action = "left" | "right" | "jump" | "duck";
 
+interface ButtonInfo {
+  rect: Phaser.GameObjects.Rectangle;
+  action: Action;
+  hitX: number;
+  hitY: number;
+  hitW: number;
+  hitH: number;
+}
+
+const HIT_PADDING = 20;
+
 export class TouchControls {
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
-  private buttons: { rect: Phaser.GameObjects.Rectangle; action: Action }[] = [];
+  private buttons: ButtonInfo[] = [];
   private activePointers: Map<number, Action> = new Map();
   private role: TouchRole;
+  private visible = false;
 
   private _leftDown = false;
   private _rightDown = false;
@@ -55,41 +67,41 @@ export class TouchControls {
     const showHorizontal = this.role !== "guest";
     const showVertical = this.role !== "host";
 
+    const add = (x: number, y: number, label: string, action: Action) => {
+      const rect = this.createButton(x, y, btnSize, btnSize, label, alpha);
+      this.buttons.push({
+        rect,
+        action,
+        hitX: x,
+        hitY: y,
+        hitW: btnSize + HIT_PADDING * 2,
+        hitH: btnSize + HIT_PADDING * 2,
+      });
+    };
+
     if (flipped) {
       if (showVertical) {
-        const jumpBtn = this.createButton(leftSideX1, bottomY - btnSize - gap, btnSize, btnSize, "▲", alpha);
-        const duckBtn = this.createButton(leftSideX2, bottomY, btnSize, btnSize, "▼", alpha);
-        this.buttons.push({ rect: jumpBtn, action: "jump" }, { rect: duckBtn, action: "duck" });
+        add(leftSideX1, bottomY - btnSize - gap, "▲", "jump");
+        add(leftSideX2, bottomY, "▼", "duck");
       }
       if (showHorizontal) {
-        const leftBtn = this.createButton(rightSideX2, bottomY, btnSize, btnSize, "◀", alpha);
-        const rightBtn = this.createButton(rightSideX1, bottomY, btnSize, btnSize, "▶", alpha);
-        this.buttons.push({ rect: leftBtn, action: "left" }, { rect: rightBtn, action: "right" });
+        add(rightSideX2, bottomY, "◀", "left");
+        add(rightSideX1, bottomY, "▶", "right");
       }
     } else {
       if (showHorizontal) {
-        const leftBtn = this.createButton(leftSideX1, bottomY, btnSize, btnSize, "◀", alpha);
-        const rightBtn = this.createButton(leftSideX2, bottomY, btnSize, btnSize, "▶", alpha);
-        this.buttons.push({ rect: leftBtn, action: "left" }, { rect: rightBtn, action: "right" });
+        add(leftSideX1, bottomY, "◀", "left");
+        add(leftSideX2, bottomY, "▶", "right");
       }
       if (showVertical) {
-        const jumpBtn = this.createButton(rightSideX1, bottomY - btnSize - gap, btnSize, btnSize, "▲", alpha);
-        const duckBtn = this.createButton(rightSideX2, bottomY, btnSize, btnSize, "▼", alpha);
-        this.buttons.push({ rect: jumpBtn, action: "jump" }, { rect: duckBtn, action: "duck" });
+        add(rightSideX1, bottomY - btnSize - gap, "▲", "jump");
+        add(rightSideX2, bottomY, "▼", "duck");
       }
     }
 
-    this.buttons.forEach(({ rect, action }) => {
-      rect.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-        this.activePointers.set(pointer.id, action);
-        this.syncState();
-      });
-      rect.on("pointerup", (pointer: Phaser.Input.Pointer) => {
-        this.activePointers.delete(pointer.id);
-        this.syncState();
-      });
-      rect.on("pointerout", (pointer: Phaser.Input.Pointer) => {
-        this.activePointers.delete(pointer.id);
+    this.buttons.forEach((info) => {
+      info.rect.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        this.activePointers.set(pointer.id, info.action);
         this.syncState();
       });
     });
@@ -98,7 +110,13 @@ export class TouchControls {
   private createButton(x: number, y: number, w: number, h: number, label: string, alpha: number): Phaser.GameObjects.Rectangle {
     const bg = this.scene.add.rectangle(x, y, w, h, 0xffffff, alpha);
     bg.setStrokeStyle(2, 0xffffff);
-    bg.setInteractive({ draggable: false });
+    const hitArea = new Phaser.Geom.Rectangle(
+      -HIT_PADDING,
+      -HIT_PADDING,
+      w + HIT_PADDING * 2,
+      h + HIT_PADDING * 2,
+    );
+    bg.setInteractive({ hitArea, hitAreaCallback: Phaser.Geom.Rectangle.Contains, draggable: false });
     this.container.add(bg);
 
     const text = this.scene.add.text(x, y, label, {
@@ -111,6 +129,24 @@ export class TouchControls {
     return bg;
   }
 
+  private pointerInButton(px: number, py: number, info: ButtonInfo): boolean {
+    const halfW = info.hitW / 2;
+    const halfH = info.hitH / 2;
+    return (
+      px >= info.hitX - halfW &&
+      px <= info.hitX + halfW &&
+      py >= info.hitY - halfH &&
+      py <= info.hitY + halfH
+    );
+  }
+
+  private hitTest(px: number, py: number): Action | null {
+    for (const info of this.buttons) {
+      if (this.pointerInButton(px, py, info)) return info.action;
+    }
+    return null;
+  }
+
   private syncState() {
     const pressed = new Set(this.activePointers.values());
     this._leftDown = pressed.has("left");
@@ -118,14 +154,36 @@ export class TouchControls {
     this._jumpDown = pressed.has("jump");
     this._duckDown = pressed.has("duck");
 
-    this.buttons.forEach(({ rect, action }) => {
-      rect.setFillStyle(0xffffff, pressed.has(action) ? 0.6 : 0.35);
+    this.buttons.forEach((info) => {
+      info.rect.setFillStyle(0xffffff, pressed.has(info.action) ? 0.6 : 0.35);
     });
   }
 
   update() {
+    if (this.visible) {
+      const pointers = this.scene.input.manager.pointers;
+      const live = new Map<number, Action>();
+      for (const p of pointers) {
+        if (!p || !p.active || !p.isDown) continue;
+        const existing = this.activePointers.get(p.id);
+        if (existing !== undefined) {
+          live.set(p.id, existing);
+        } else {
+          const action = this.hitTest(p.x, p.y);
+          if (action) live.set(p.id, action);
+        }
+      }
+      this.activePointers = live;
+      this.syncState();
+    }
+
     this._jumpJustDown = this._jumpDown && !this._jumpWasDown;
     this._jumpWasDown = this._jumpDown;
+  }
+
+  resetJumpEdge() {
+    this._jumpWasDown = false;
+    this._jumpJustDown = false;
   }
 
   getState(): TouchInputState {
@@ -141,11 +199,13 @@ export class TouchControls {
   show() {
     this.container.setVisible(true);
     this.container.setActive(true);
+    this.visible = true;
   }
 
   hide() {
     this.container.setVisible(false);
     this.container.setActive(false);
+    this.visible = false;
     this.activePointers.clear();
     this._leftDown = false;
     this._rightDown = false;

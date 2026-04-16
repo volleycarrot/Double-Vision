@@ -341,6 +341,7 @@ export class GameScene extends Phaser.Scene {
       this.touchControls = null;
     }
     if (getInputMode() === "mobile") {
+      this.input.addPointer(3);
       const touchRole = this.gameMode === "online" ? (onlineManager.role ?? null) : null;
       this.touchControls = new TouchControls(this, touchRole);
       this.touchControls.show();
@@ -1888,6 +1889,13 @@ export class GameScene extends Phaser.Scene {
           this.player.body.setVelocity(0, 0);
           this.player.body.setAllowGravity(false);
           this.player.setPosition(endX, endY);
+          if (this.touchControls) {
+            this.touchControls.resetJumpEdge();
+          }
+          if (this.cursors?.jump) {
+            Phaser.Input.Keyboard.JustDown(this.cursors.jump);
+          }
+          this.onlineJumpLatch = false;
         }
       }
     });
