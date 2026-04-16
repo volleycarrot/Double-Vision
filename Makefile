@@ -1,7 +1,7 @@
 PORT ?= 5173
 BASE_PATH ?= /
 
-.PHONY: install dev docker-build docker-restart docker-clean-restart docker-logs docker-shell docker-stop
+.PHONY: install dev docker-build docker-restart docker-clean-restart docker-logs docker-shell docker-claude docker-stop
 
 install:
 	pnpm install
@@ -23,6 +23,9 @@ docker-logs:
 
 docker-shell:
 	@. .env.docker && docker exec -it "$$DOCKER_CONTAINER_NAME" bash
+
+docker-claude:
+	@. .env.docker && docker exec -it "$$DOCKER_CONTAINER_NAME" claude
 
 docker-stop:
 	@. .env.docker && docker rm -f "$$DOCKER_CONTAINER_NAME"

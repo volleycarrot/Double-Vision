@@ -27,10 +27,30 @@ IMAGE="${DOCKER_IMAGE_NAME}"
 DOCKER_RUN_ARGS=(
   -e "PORT=$APP_PORT"
   -e "BASE_PATH=/"
+  -e "TZ=${TZ:-$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||' || echo UTC)}"
   -v "$PROJECT_DIR:/workspace"
   -v "${CONTAINER}-node-modules:/workspace/node_modules"
+  -v "${CONTAINER}-claude-home:/home/agent/.claude"
   -p "${APP_PORT}:${APP_PORT}"
 )
+
+# Mount ateam binary if available
+ATEAM_BUILD="$HOME/projects/ateam/build"
+if [ -d "$ATEAM_BUILD" ]; then
+  DOCKER_RUN_ARGS+=(-v "$ATEAM_BUILD:/opt/ateam:ro")
+fi
+
+# Mount ateamorg if available
+ATEAMORG_DIR="$(ateam env --print-org 2>/dev/null || echo "")"
+if [ -n "$ATEAMORG_DIR" ] && [ -d "$ATEAMORG_DIR" ]; then
+  DOCKER_RUN_ARGS+=(-v "$ATEAMORG_DIR:/.ateamorg:ro")
+  if [ -d "$ATEAMORG_DIR/claude_linux_shared" ]; then
+    DOCKER_RUN_ARGS+=(-v "$ATEAMORG_DIR/claude_linux_shared:/.ateamorg/claude_linux_shared:rw")
+  fi
+  if [ -e "$ATEAMORG_DIR/claude_linux_shared/secrets.env" ]; then
+    DOCKER_RUN_ARGS+=(-v "$ATEAMORG_DIR/claude_linux_shared/secrets.env:/.ateamorg/claude_linux_shared/secrets.env:ro")
+  fi
+fi
 
 docker rm -f "$CONTAINER" 2>/dev/null || true
 

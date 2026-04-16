@@ -2,13 +2,22 @@ FROM node:22-bookworm-slim
 
 # === Layer 1: System packages ===
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl sudo ca-certificates \
-    procps make python3 \
+    git curl wget sudo ca-certificates locales \
+    ripgrep fd-find jq tree make bubblewrap socat \
+    python3 python3-pip \
+    tmux procps file less util-linux vim-tiny htop bat \
+    bash-completion lsof strace net-tools \
+    && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen \
+    && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
-# === Layer 2: pnpm ===
+ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+
+# === Layer 2: pnpm + Claude Code ===
 ENV COREPACK_ENABLE_AUTO_PIN=0
-RUN corepack enable && corepack prepare pnpm@latest --activate
+ENV CLAUDE_CODE_DISABLE_AUTO_UPDATE=1
+RUN corepack enable && corepack prepare pnpm@latest --activate \
+    && npm install -g @anthropic-ai/claude-code
 
 # === Layer 3: Agent user matching host UID ===
 ARG USER_UID=1000
@@ -21,13 +30,17 @@ RUN if [ "$USER_UID" != "1000" ]; then \
     && echo "agent ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/agent \
     && chmod 0440 /etc/sudoers.d/agent
 
-# === Layer 4: Working directory ===
+# === Layer 4: Working directory + symlinks ===
 RUN mkdir -p /workspace && chown "$USER_UID":"$USER_UID" /workspace 2>/dev/null || true
+RUN ln -sf /usr/bin/batcat /usr/local/bin/bat \
+    && ln -sf /opt/ateam/ateam-linux-amd64 /usr/local/bin/ateam
 
 COPY entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER agent
+RUN echo "alias ll='ls -alFh'" >> ~/.bashrc \
+    && echo "alias bat='batcat'" >> ~/.bashrc
 WORKDIR /workspace
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["dev"]

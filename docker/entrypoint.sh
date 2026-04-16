@@ -7,6 +7,11 @@ BASE_PATH="${BASE_PATH:-/}"
 export PORT="$APP_PORT"
 export BASE_PATH
 
+# Fix ownership of ~/.claude when volume-mounted (Docker creates it as root)
+if [ -d "$HOME/.claude" ] && [ "$(stat -c %u "$HOME/.claude" 2>/dev/null)" != "$(id -u)" ]; then
+  sudo chown -R "$(id -u):$(id -g)" "$HOME/.claude" 2>/dev/null || true
+fi
+
 # ============================================================
 # 1. Install dependencies if missing or stale
 # ============================================================
@@ -74,6 +79,12 @@ case "${1:-dev}" in
     install_deps
     cd /workspace
     exec pnpm run build
+    ;;
+  claude)
+    shift
+    install_deps
+    cd /workspace
+    exec claude "$@"
     ;;
   *)
     exec "$@"
