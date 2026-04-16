@@ -576,6 +576,17 @@ export class MapEditorScene extends Phaser.Scene {
 
     if (this.saveStatus) this.saveStatus.setText("Saving...").setColor("#ffcc00");
 
+    const parseError = async (res: Response): Promise<string> => {
+      try {
+        const data = await res.json();
+        if (data && typeof data.error === "string") return data.error;
+      } catch {
+        // not JSON
+      }
+      if (res.status === 413) return "Map too large to save";
+      return "Error";
+    };
+
     try {
       if (this.mapId) {
         const res = await apiRequest(`/user/maps/${this.mapId}`, {
@@ -591,8 +602,8 @@ export class MapEditorScene extends Phaser.Scene {
         if (res.ok) {
           if (this.saveStatus) this.saveStatus.setText("Saved!").setColor("#88ff88");
         } else {
-          const data = await res.json();
-          if (this.saveStatus) this.saveStatus.setText(data.error || "Error").setColor("#ff4444");
+          const msg = await parseError(res);
+          if (this.saveStatus) this.saveStatus.setText(msg).setColor("#ff4444");
         }
       } else {
         const res = await apiRequest("/user/maps", {
@@ -610,8 +621,8 @@ export class MapEditorScene extends Phaser.Scene {
           this.mapId = data.map.id;
           if (this.saveStatus) this.saveStatus.setText("Saved!").setColor("#88ff88");
         } else {
-          const data = await res.json();
-          if (this.saveStatus) this.saveStatus.setText(data.error || "Error").setColor("#ff4444");
+          const msg = await parseError(res);
+          if (this.saveStatus) this.saveStatus.setText(msg).setColor("#ff4444");
         }
       }
     } catch {
