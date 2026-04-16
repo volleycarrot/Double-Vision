@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { WORLDS, TILE, LEVEL_WIDTH, LEVEL_HEIGHT, PHYSICS, CHECKPOINT_COUNT } from "../worlds/WorldConfig";
 import { generateLevel, type LevelTile } from "../worlds/LevelGenerator";
-import { markWorldCompleted, allWorldsCompleted } from "../ProgressManager";
+import { markWorldCompleted, allWorldsCompleted, clearWorldDeathless } from "../ProgressManager";
 import { recordDeath, recordLevelCompletion } from "../StatsManager";
 import { getSelectedColor, drawEyes } from "../PlayerConfig";
 import { drawAccessories } from "../AccessoryManager";
@@ -17,6 +17,7 @@ import { createJungleBackground, updateJungleParallax } from "../worlds/JungleBa
 import type { ParallaxLayer } from "../worlds/JungleBackground";
 import { createBeachBackground, updateBeachParallax, type BeachParallaxLayer } from "../worlds/BeachBackground";
 import { createWarZoneBackground, updateWarZoneBackground, destroyWarZoneBackground, type WarZoneBackgroundState } from "../worlds/WarZoneBackground";
+import { attachUnlockToast } from "../UnlockToast";
 
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -120,6 +121,8 @@ export class GameScene extends Phaser.Scene {
     this.customGroundColor = data.customGroundColor;
     this.customPlatformColor = data.customPlatformColor;
     this.isDead = false;
+
+    attachUnlockToast(this);
 
     setWorldIndex(this.worldIndex);
     startMusic(this.worldIndex);
@@ -1952,6 +1955,9 @@ export class GameScene extends Phaser.Scene {
     this.isDead = true;
     this.deaths++;
     recordDeath();
+    if (!this.customTiles) {
+      clearWorldDeathless(this.worldIndex);
+    }
 
     if (this.touchControls) {
       this.touchControls.hide();
@@ -2005,7 +2011,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.customTiles) {
-      markWorldCompleted(this.worldIndex, this.deaths);
+      markWorldCompleted(this.worldIndex, this.deaths, this.deaths === 0);
     }
     recordLevelCompletion();
 

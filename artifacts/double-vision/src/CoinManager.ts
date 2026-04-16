@@ -1,5 +1,6 @@
 import { isLoggedIn, syncCoins } from "./AuthManager";
 import { recordCoinsEarned, recordCoinsSpent } from "./StatsManager";
+import { emitProgressChange } from "./EventBus";
 
 const STORAGE_KEY = "double-vision-coins";
 
@@ -34,6 +35,7 @@ export function addCoins(amount: number): void {
   coinBalance += Math.floor(amount);
   save();
   recordCoinsEarned(Math.floor(amount));
+  emitProgressChange();
 }
 
 export function spendCoins(amount: number): boolean {

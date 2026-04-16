@@ -15,6 +15,7 @@ export const userProgressTable = pgTable("user_progress", {
   worldIndex: integer("world_index").notNull(),
   completed: boolean("completed").notNull().default(false),
   deaths: integer("deaths").notNull().default(0),
+  deathless: boolean("deathless").notNull().default(false),
 }, (table) => [
   uniqueIndex("user_progress_user_world_idx").on(table.userId, table.worldIndex),
 ]);
@@ -35,6 +36,7 @@ export const userStatsTable = pgTable("user_stats", {
   totalCoinsSpent: integer("total_coins_spent").notNull().default(0),
   totalDeaths: integer("total_deaths").notNull().default(0),
   totalLevelCompletions: integer("total_level_completions").notNull().default(0),
+  totalLevelsCreated: integer("total_levels_created").notNull().default(0),
 });
 
 export const customMapsTable = pgTable("custom_maps", {

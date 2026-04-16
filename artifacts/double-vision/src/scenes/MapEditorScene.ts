@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { TILE, LEVEL_HEIGHT } from "../worlds/WorldConfig";
 import type { LevelTile } from "../worlds/LevelGenerator";
 import { apiRequest, isLoggedIn } from "../AuthManager";
+import { recordLevelCreated } from "../StatsManager";
+import { attachUnlockToast } from "../UnlockToast";
 import type { GameMode } from "./ModeSelectScene";
 
 type TileType = LevelTile["type"];
@@ -92,6 +94,8 @@ export class MapEditorScene extends Phaser.Scene {
     this.paletteIndicators = [];
     this.colorPickerObjects = [];
     this.saveStatus = null;
+
+    attachUnlockToast(this);
 
     this.bgColorIndex = BG_COLORS.indexOf(this.bgColor);
     if (this.bgColorIndex < 0) this.bgColorIndex = 0;
@@ -626,6 +630,7 @@ export class MapEditorScene extends Phaser.Scene {
         if (res.ok) {
           const data = await res.json();
           this.mapId = data.map.id;
+          recordLevelCreated();
           if (this.saveStatus) this.saveStatus.setText("Saved!").setColor("#88ff88");
         } else {
           const msg = await parseError(res);

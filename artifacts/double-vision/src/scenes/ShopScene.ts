@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { getCoins, spendCoins } from "../CoinManager";
 import {
   ACCESSORIES,
+  SPECIALS,
   isOwned,
   purchaseAccessory,
   equipAccessory,
@@ -9,8 +10,18 @@ import {
   getEquipped,
   drawAccessories,
   drawSingleAccessory,
+  drawSpecialPreview,
+  isSpecialOwned,
+  equipSpecial,
+  unequipSpecial,
+  getEquippedSpecial,
+  getSpecialProgress,
+  devUnlockAll,
   type Accessory,
+  type Special,
 } from "../AccessoryManager";
+import { attachUnlockToast } from "../UnlockToast";
+import { getUsername, isLoggedIn } from "../AuthManager";
 import {
   getSelectedColor,
   getSelectedColorIndex,
@@ -19,12 +30,15 @@ import {
 } from "../PlayerConfig";
 import { getBgColor } from "../GameSettings";
 
-type Category = "hat" | "glasses" | "neckwear";
+const DEV_USERNAMES = new Set(["Officialbob", "ZeBob_1", "coolestmaneverrrrrrr"]);
+
+type Category = "hat" | "glasses" | "neckwear" | "special";
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: "hat", label: "Headwear" },
   { key: "glasses", label: "Eyewear" },
   { key: "neckwear", label: "Neckwear" },
+  { key: "special", label: "Specials" },
 ];
 
 const LIST_TOP = 130;
@@ -129,6 +143,30 @@ export class ShopScene extends Phaser.Scene {
     this.input.on("pointermove", this.boundPointermove);
     this.input.on("pointerup", this.boundPointerup);
 
+    attachUnlockToast(this);
+
+    if (import.meta.env.DEV && isLoggedIn() && DEV_USERNAMES.has(getUsername())) {
+      const devBtn = this.add
+        .text(width - 16, 16, "DEV: Unlock All", {
+          fontSize: "12px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+          backgroundColor: "#aa3388",
+          padding: { x: 8, y: 4 },
+          fontStyle: "bold",
+        })
+        .setOrigin(1, 0)
+        .setDepth(500)
+        .setInteractive({ useHandCursor: true });
+      devBtn.on("pointerover", () => devBtn.setBackgroundColor("#cc44aa"));
+      devBtn.on("pointerout", () => devBtn.setBackgroundColor("#aa3388"));
+      devBtn.on("pointerdown", () => {
+        devUnlockAll();
+        this.showMessage("DEV: All accessories unlocked!", "#ff88ff");
+        this.refreshShop();
+      });
+    }
+
     this.renderCategoryTabs(width);
     this.renderItems();
     this.renderPreview(width, height);
@@ -210,14 +248,18 @@ export class ShopScene extends Phaser.Scene {
       this.scrollbarGfx = null;
     }
 
-    const items = ACCESSORIES.filter(
-      (a) => a.category === this.selectedCategory,
-    );
+    const isSpecial = this.selectedCategory === "special";
+    const items = isSpecial
+      ? []
+      : ACCESSORIES.filter((a) => a.category === this.selectedCategory);
+    const specialItems = isSpecial ? SPECIALS : [];
+    const rowH = isSpecial ? ITEM_H + 12 : ITEM_H;
     const itemW = 360;
     const { width, height } = this.scale;
     const listX = width / 2 - 100;
     const visibleHeight = height - LIST_TOP - LIST_BOTTOM_MARGIN;
-    const contentHeight = items.length * (ITEM_H + ITEM_GAP) - ITEM_GAP;
+    const rowCount = isSpecial ? specialItems.length : items.length;
+    const contentHeight = rowCount * (rowH + ITEM_GAP) - ITEM_GAP;
 
     this.listHeight = visibleHeight;
     this.maxScroll = Math.max(0, contentHeight - visibleHeight);
@@ -250,6 +292,13 @@ export class ShopScene extends Phaser.Scene {
       this.dragStartScroll = this.scrollY;
     });
 
+    if (isSpecial) {
+      this.renderSpecialItems(specialItems, listX, itemW, rowH);
+      this.renderScrollIndicators(listX, itemW, visibleHeight);
+      this.applyScroll();
+      return;
+    }
+
     items.forEach((item, i) => {
       const y = i * (ITEM_H + ITEM_GAP);
       const owned = isOwned(item.id);
@@ -268,7 +317,7 @@ export class ShopScene extends Phaser.Scene {
         partyhat: 21,
         cowboy: 15,
         beanie: 16,
-        halo: 18,
+        glowring: 18,
         sunglasses: 3,
         nerdglasses: 5,
         monocle: 0,
@@ -332,6 +381,75 @@ export class ShopScene extends Phaser.Scene {
 
     this.renderScrollIndicators(listX, itemW, visibleHeight);
     this.applyScroll();
+  }
+
+  private renderSpecialItems(specialItems: Special[], listX: number, itemW: number, rowH: number) {
+    const equippedSpecial = getEquippedSpecial();
+    specialItems.forEach((sp, i) => {
+      const y = i * (rowH + ITEM_GAP);
+      const owned = isSpecialOwned(sp.id);
+      const equipped = equippedSpecial?.id === sp.id;
+
+      const bg = this.add.rectangle(listX, y + rowH / 2, itemW, rowH, 0x16213e, 0.9);
+      bg.setStrokeStyle(2, equipped ? 0x00ff88 : owned ? 0xffaa00 : 0x222244);
+      this.scrollContainer!.add(bg);
+
+      const iconSize = 28;
+      const iconX = listX - itemW / 2 + 28;
+      const iconY = y + rowH / 2;
+      const iconGfx = this.add.graphics();
+      iconGfx.setPosition(iconX, iconY);
+      drawSpecialPreview(iconGfx, sp.id, 0, 8, iconSize * 0.7, iconSize);
+      this.scrollContainer!.add(iconGfx);
+
+      const name = this.add
+        .text(listX - itemW / 2 + 64, y + 8, sp.name, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: equipped ? "#00ff88" : owned ? "#ffdd44" : "#bbbbbb",
+          fontStyle: "bold",
+        })
+        .setOrigin(0, 0);
+      this.scrollContainer!.add(name);
+
+      const desc = this.add
+        .text(listX - itemW / 2 + 64, y + 26, sp.description, {
+          fontSize: "10px",
+          fontFamily: "monospace",
+          color: "#999999",
+        })
+        .setOrigin(0, 0);
+      this.scrollContainer!.add(desc);
+
+      const progress = getSpecialProgress(sp.id);
+      const progressColor = owned ? "#00ff88" : "#ffaa66";
+      const requirementText = owned ? "✓ Unlocked" : `🔒 ${progress.text}`;
+      const req = this.add
+        .text(listX - itemW / 2 + 64, y + 44, requirementText, {
+          fontSize: "10px",
+          fontFamily: "monospace",
+          color: progressColor,
+        })
+        .setOrigin(0, 0);
+      this.scrollContainer!.add(req);
+
+      const btnX = listX + itemW / 2 - 50;
+      const btnY = y + rowH / 2;
+
+      if (!owned) {
+        this.createButton(btnX, btnY, "LOCKED", 70, 28, 0x333344, () => {});
+      } else if (equipped) {
+        this.createButton(btnX, btnY, "REMOVE", 70, 28, 0x663322, () => {
+          unequipSpecial();
+          this.refreshShop();
+        });
+      } else {
+        this.createButton(btnX, btnY, "EQUIP", 70, 28, 0x224488, () => {
+          equipSpecial(sp.id);
+          this.refreshShop();
+        });
+      }
+    });
   }
 
   private renderScrollIndicators(listX: number, itemW: number, visibleHeight: number) {
