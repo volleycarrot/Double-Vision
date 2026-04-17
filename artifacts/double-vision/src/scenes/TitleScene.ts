@@ -3,7 +3,7 @@ import { WORLDS } from "../worlds/WorldConfig";
 import { loadProgress } from "../ProgressManager";
 import { COLOR_PRESETS, getSelectedColor, getSelectedColorIndex, setSelectedColorIndex, EYE, getEyeOffsetY } from "../PlayerConfig";
 import type { GameMode } from "./ModeSelectScene";
-import { getBindings, getKeyName, setBinding, resetBindings, isReservedKey, isArrowNavKey, isLetterKey, type ControlBindings } from "../KeyBindings";
+import { getBindings, getKeyName, setBinding, resetBindings, isReservedKey, type ControlBindings } from "../KeyBindings";
 import { getBgColor, getSettings, setMusicEnabled, setBgColorIndex, BG_PRESETS, getInputMode, setInputMode, getControlsFlipped, setControlsFlipped, type InputMode } from "../GameSettings";
 import { toggleMusic } from "../MusicManager";
 import { onlineManager, type CustomMapData } from "../OnlineMultiplayerManager";
@@ -11,7 +11,7 @@ import { isLoggedIn, getUsername, logout, apiRequest } from "../AuthManager";
 import { getStats } from "../StatsManager";
 
 export class TitleScene extends Phaser.Scene {
-  private gameMode: GameMode = "multiplayer";
+  private gameMode: GameMode = "single";
   private settingsOpen = false;
   private statsOpen = false;
   private settingsOverlay: Phaser.GameObjects.Rectangle | null = null;
@@ -37,7 +37,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(data: { gameMode?: GameMode }) {
-    this.gameMode = data?.gameMode || "multiplayer";
+    this.gameMode = data?.gameMode || "single";
     this.settingsOpen = false;
     this.statsOpen = false;
     this.settingsOverlay = null;
@@ -73,10 +73,9 @@ export class TitleScene extends Phaser.Scene {
 
     const modeLabels: Record<string, string> = {
       single: "Single Player",
-      multiplayer: "2-Player Co-op Platformer",
       online: "Online Co-op",
     };
-    const modeLabel = modeLabels[this.gameMode] || "2-Player Co-op Platformer";
+    const modeLabel = modeLabels[this.gameMode] || "Single Player";
     const subtitle = this.add.text(leftCenterX, height * 0.25, modeLabel, {
       fontSize: "18px",
       fontFamily: "monospace",
@@ -435,8 +434,7 @@ export class TitleScene extends Phaser.Scene {
 
     const controlBoxY = height * 0.48;
     const controlBoxW = 440;
-    const bindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
-    const bindings = getBindings(bindingsMode);
+    const bindings = getBindings("single");
 
     if (this.gameMode === "online") {
       const controlBoxH = 120;
@@ -560,85 +558,6 @@ export class TitleScene extends Phaser.Scene {
           color: "#ffffff",
         });
         this.controlTexts.push(actVal);
-      }
-    } else {
-      const isMobile = getInputMode() === "mobile";
-      const controlBoxH = 120;
-      const controlBg = this.add.rectangle(leftCenterX, controlBoxY, controlBoxW, controlBoxH, 0x16213e, 0.8);
-      controlBg.setStrokeStyle(2, 0x0f3460);
-      this.controlTexts.push(controlBg);
-
-      const header = this.add.text(leftCenterX, controlBoxY - 40, isMobile ? "TOUCH CONTROLS" : "CONTROLS", {
-        fontSize: "16px",
-        fontFamily: "monospace",
-        color: "#e94560",
-        fontStyle: "bold",
-      }).setOrigin(0.5);
-      this.controlTexts.push(header);
-
-      const textLeftX = leftCenterX - controlBoxW / 2 + 20;
-      const textRightX = leftCenterX - controlBoxW / 2 + 170;
-
-      if (isMobile) {
-        const flipped = getControlsFlipped();
-        const moveSide = flipped ? "bottom-right" : "bottom-left";
-        const actSide = flipped ? "bottom-left" : "bottom-right";
-
-        const moveLabel = this.add.text(textLeftX, controlBoxY - 12, "Move:", {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#ffcc00",
-        });
-        this.controlTexts.push(moveLabel);
-
-        const moveVal = this.add.text(textRightX, controlBoxY - 12, `◀ ▶  buttons (${moveSide})`, {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#ffffff",
-        });
-        this.controlTexts.push(moveVal);
-
-        const actLabel = this.add.text(textLeftX, controlBoxY + 14, "Actions:", {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#00ccff",
-        });
-        this.controlTexts.push(actLabel);
-
-        const actVal = this.add.text(textRightX, controlBoxY + 14, `▲ Jump  ▼ Duck (${actSide})`, {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#ffffff",
-        });
-        this.controlTexts.push(actVal);
-      } else {
-        const p1Label = this.add.text(textLeftX, controlBoxY - 12, "Player 1:", {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#ffcc00",
-        });
-        this.controlTexts.push(p1Label);
-
-        const p1Val = this.add.text(textRightX, controlBoxY - 12, `${getKeyName(bindings.jump)} = Jump  |  ${getKeyName(bindings.duck)} = Duck`, {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#ffffff",
-        });
-        this.controlTexts.push(p1Val);
-
-        const p2Label = this.add.text(textLeftX, controlBoxY + 14, "Player 2:", {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#00ccff",
-        });
-        this.controlTexts.push(p2Label);
-
-        const p2Val = this.add.text(textRightX, controlBoxY + 14, `${getKeyName(bindings.left)} = Left  |  ${getKeyName(bindings.right)} = Right`, {
-          fontSize: "14px",
-          fontFamily: "monospace",
-          color: "#ffffff",
-        });
-        this.controlTexts.push(p2Val);
       }
     }
   }
@@ -1077,7 +996,7 @@ export class TitleScene extends Phaser.Scene {
 
   private getModalDimensions() {
     const modalW = 440;
-    const modalH = this.gameMode === "multiplayer" ? 500 : 460;
+    const modalH = 460;
     return { modalW, modalH };
   }
 
@@ -1296,8 +1215,7 @@ export class TitleScene extends Phaser.Scene {
       }).setOrigin(0.5);
       this.settingsDynamicObjects.push(layoutDesc);
     } else {
-      const settingsBindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
-      const bindings = getBindings(settingsBindingsMode);
+      const bindings = getBindings("single");
       const actionLabels: Record<keyof ControlBindings, string> = {
         left: "Move Left",
         right: "Move Right",
@@ -1305,44 +1223,11 @@ export class TitleScene extends Phaser.Scene {
         duck: "Duck",
       };
 
-      if (this.gameMode === "multiplayer") {
-        const p1Header = this.add.text(modalX, curY, "PLAYER 1 (Letter Keys)", {
-          fontSize: "12px",
-          fontFamily: "monospace",
-          color: "#ffcc00",
-          fontStyle: "bold",
-        }).setOrigin(0.5);
-        this.settingsDynamicObjects.push(p1Header);
-
-        curY += 22;
-        const p1Actions: (keyof ControlBindings)[] = ["jump", "duck"];
-        p1Actions.forEach((action, i) => {
-          const rowY = curY + i * 32;
-          this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
-        });
-
-        curY += p1Actions.length * 32 + 12;
-        const p2Header = this.add.text(modalX, curY, "PLAYER 2 (Arrow/Nav Keys)", {
-          fontSize: "12px",
-          fontFamily: "monospace",
-          color: "#00ccff",
-          fontStyle: "bold",
-        }).setOrigin(0.5);
-        this.settingsDynamicObjects.push(p2Header);
-
-        curY += 22;
-        const p2Actions: (keyof ControlBindings)[] = ["left", "right"];
-        p2Actions.forEach((action, i) => {
-          const rowY = curY + i * 32;
-          this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
-        });
-      } else {
-        const actions: (keyof ControlBindings)[] = ["left", "right", "jump", "duck"];
-        actions.forEach((action, i) => {
-          const rowY = curY + i * 34;
-          this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
-        });
-      }
+      const actions: (keyof ControlBindings)[] = ["left", "right", "jump", "duck"];
+      actions.forEach((action, i) => {
+        const rowY = curY + i * 34;
+        this.renderBindingRow(modalX, rowY, modalW, action, actionLabels[action], bindings[action]);
+      });
 
       const resetBtn = this.createButton(
         modalX, modalY + modalH / 2 - 28, 180, 28,
@@ -1350,7 +1235,7 @@ export class TitleScene extends Phaser.Scene {
       );
       resetBtn.forEach(obj => this.settingsDynamicObjects.push(obj));
       (resetBtn[0] as Phaser.GameObjects.Rectangle).on("pointerdown", () => {
-        resetBindings(this.gameMode === "online" ? "single" : this.gameMode);
+        resetBindings("single");
         this.refreshSettingsModal();
         this.refreshControlsBox();
       });
@@ -1414,20 +1299,7 @@ export class TitleScene extends Phaser.Scene {
         return;
       }
 
-      if (this.gameMode === "multiplayer") {
-        const isP1Action = action === "jump" || action === "duck";
-        if (isP1Action && !isLetterKey(keyCode)) {
-          this.showError("Player 1 keys must be letter keys (A-Z)");
-          return;
-        }
-        if (!isP1Action && !isArrowNavKey(keyCode)) {
-          this.showError("Player 2 keys must be arrow/nav keys");
-          return;
-        }
-      }
-
-      const kbMode = this.gameMode === "online" ? "single" : this.gameMode;
-      const bindings = getBindings(kbMode);
+      const bindings = getBindings("single");
       const actions = Object.keys(bindings) as (keyof ControlBindings)[];
       for (const a of actions) {
         if (a !== action && bindings[a] === keyCode) {
@@ -1440,7 +1312,7 @@ export class TitleScene extends Phaser.Scene {
       this.waitingForKey = null;
       this.clearError();
 
-      setBinding(kbMode, action, keyCode);
+      setBinding("single", action, keyCode);
       this.refreshSettingsModal();
       this.refreshControlsBox();
     };

@@ -11,7 +11,6 @@ export interface ControlBindings {
 
 export interface KeyBindingsConfig {
   single: ControlBindings;
-  multiplayer: ControlBindings;
 }
 
 const DEFAULT_BINDINGS: KeyBindingsConfig = {
@@ -20,12 +19,6 @@ const DEFAULT_BINDINGS: KeyBindingsConfig = {
     right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
     jump: Phaser.Input.Keyboard.KeyCodes.UP,
     duck: Phaser.Input.Keyboard.KeyCodes.DOWN,
-  },
-  multiplayer: {
-    left: Phaser.Input.Keyboard.KeyCodes.LEFT,
-    right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
-    jump: Phaser.Input.Keyboard.KeyCodes.W,
-    duck: Phaser.Input.Keyboard.KeyCodes.S,
   },
 };
 
@@ -36,20 +29,16 @@ function loadFromStorage(): KeyBindingsConfig {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return cloneBindings(DEFAULT_BINDINGS);
     const parsed = JSON.parse(raw) as KeyBindingsConfig;
-    if (!parsed.single || !parsed.multiplayer) return cloneBindings(DEFAULT_BINDINGS);
+    if (!parsed.single) return cloneBindings(DEFAULT_BINDINGS);
     if (
       typeof parsed.single.left !== "number" ||
       typeof parsed.single.right !== "number" ||
       typeof parsed.single.jump !== "number" ||
-      typeof parsed.single.duck !== "number" ||
-      typeof parsed.multiplayer.left !== "number" ||
-      typeof parsed.multiplayer.right !== "number" ||
-      typeof parsed.multiplayer.jump !== "number" ||
-      typeof parsed.multiplayer.duck !== "number"
+      typeof parsed.single.duck !== "number"
     ) {
       return cloneBindings(DEFAULT_BINDINGS);
     }
-    return parsed;
+    return { single: { ...parsed.single } };
   } catch {
     return cloneBindings(DEFAULT_BINDINGS);
   }
@@ -58,7 +47,6 @@ function loadFromStorage(): KeyBindingsConfig {
 function cloneBindings(b: KeyBindingsConfig): KeyBindingsConfig {
   return {
     single: { ...b.single },
-    multiplayer: { ...b.multiplayer },
   };
 }
 
@@ -68,20 +56,20 @@ function saveToStorage(): void {
   } catch {}
 }
 
-export function getBindings(mode: "single" | "multiplayer"): ControlBindings {
+export function getBindings(mode: "single"): ControlBindings {
   return { ...currentBindings[mode] };
 }
 
-export function getDefaultBindings(mode: "single" | "multiplayer"): ControlBindings {
+export function getDefaultBindings(mode: "single"): ControlBindings {
   return { ...DEFAULT_BINDINGS[mode] };
 }
 
-export function setBinding(mode: "single" | "multiplayer", action: keyof ControlBindings, keyCode: number): void {
+export function setBinding(mode: "single", action: keyof ControlBindings, keyCode: number): void {
   currentBindings[mode][action] = keyCode;
   saveToStorage();
 }
 
-export function resetBindings(mode: "single" | "multiplayer"): void {
+export function resetBindings(mode: "single"): void {
   currentBindings[mode] = { ...DEFAULT_BINDINGS[mode] };
   saveToStorage();
 }
@@ -114,27 +102,6 @@ export function getKeyName(keyCode: number): string {
   );
   if (entry) return entry[0].length === 1 ? entry[0] : entry[0].charAt(0) + entry[0].slice(1).toLowerCase();
   return `Key${keyCode}`;
-}
-
-const ARROW_NAV_KEYS = new Set([
-  Phaser.Input.Keyboard.KeyCodes.LEFT,
-  Phaser.Input.Keyboard.KeyCodes.RIGHT,
-  Phaser.Input.Keyboard.KeyCodes.UP,
-  Phaser.Input.Keyboard.KeyCodes.DOWN,
-  Phaser.Input.Keyboard.KeyCodes.PAGE_UP,
-  Phaser.Input.Keyboard.KeyCodes.PAGE_DOWN,
-  Phaser.Input.Keyboard.KeyCodes.HOME,
-  Phaser.Input.Keyboard.KeyCodes.END,
-  Phaser.Input.Keyboard.KeyCodes.INSERT,
-  Phaser.Input.Keyboard.KeyCodes.DELETE,
-]);
-
-export function isArrowNavKey(keyCode: number): boolean {
-  return ARROW_NAV_KEYS.has(keyCode);
-}
-
-export function isLetterKey(keyCode: number): boolean {
-  return keyCode >= 65 && keyCode <= 90;
 }
 
 const RESERVED_KEYS = new Set([

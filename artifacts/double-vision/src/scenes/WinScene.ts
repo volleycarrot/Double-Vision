@@ -6,10 +6,10 @@ export class WinScene extends Phaser.Scene {
     super({ key: "WinScene" });
   }
 
-  private gameMode: GameMode = "multiplayer";
+  private gameMode: GameMode = "single";
 
   create(data: { deaths: number; startTime: number; gameMode?: GameMode }) {
-    this.gameMode = data?.gameMode || "multiplayer";
+    this.gameMode = data?.gameMode || "single";
     const { width, height } = this.scale;
     const elapsed = Math.floor((Date.now() - data.startTime) / 1000);
     const minutes = Math.floor(elapsed / 60);

@@ -37,7 +37,7 @@ export class GameScene extends Phaser.Scene {
   private worldIndex: number = 0;
   private deaths: number = 0;
   private startTime: number = 0;
-  private gameMode: GameMode = "multiplayer";
+  private gameMode: GameMode = "single";
   private lastCheckpointX: number = 0;
   private lastCheckpointY: number = 0;
   private previousPlayerX: number = 0;
@@ -115,7 +115,7 @@ export class GameScene extends Phaser.Scene {
     this.worldIndex = data.worldIndex;
     this.deaths = data.deaths;
     this.startTime = data.startTime;
-    this.gameMode = data.gameMode || "multiplayer";
+    this.gameMode = data.gameMode || "single";
     this.levelSeed = data.levelSeed;
     this.customTiles = data.customTiles;
     this.customBgColor = data.customBgColor;
@@ -269,8 +269,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, levelPixelWidth, 15 * TILE);
     this.physics.world.setBounds(0, 0, levelPixelWidth, 20 * TILE);
 
-    const bindingsMode = this.gameMode === "online" ? "single" : this.gameMode;
-    const bindings = getBindings(bindingsMode);
+    const bindings = getBindings("single");
     this.cursors = {
       left: this.input.keyboard!.addKey(bindings.left),
       right: this.input.keyboard!.addKey(bindings.right),
