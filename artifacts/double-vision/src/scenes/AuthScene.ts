@@ -136,7 +136,7 @@ export class AuthScene extends Phaser.Scene {
     const scaleX = canvasRect.width / 800;
     const scaleY = canvasRect.height / 480;
 
-    const formTopRatio = mode === "register" ? 0.25 : 0.3;
+    const formTopRatio = mode === "register" ? 0.22 : 0.3;
     const container = document.createElement("div");
     container.style.position = "absolute";
     container.style.left = `${canvasRect.left + (width / 2 - 130) * scaleX}px`;
@@ -170,9 +170,18 @@ export class AuthScene extends Phaser.Scene {
     this.usernameInput = document.createElement("input");
     this.usernameInput.type = "text";
     this.usernameInput.placeholder = "Enter username";
-    this.usernameInput.maxLength = 20;
+    this.usernameInput.maxLength = mode === "register" ? 15 : 20;
     this.usernameInput.style.cssText = inputStyle;
     container.appendChild(this.usernameInput);
+
+    if (mode === "register") {
+      const usernameHint = document.createElement("div");
+      usernameHint.textContent = "3-15 characters: letters, numbers, underscores";
+      usernameHint.style.color = "#666688";
+      usernameHint.style.fontFamily = "monospace";
+      usernameHint.style.fontSize = `${10 * scaleY}px`;
+      container.appendChild(usernameHint);
+    }
 
     const passwordLabel = document.createElement("label");
     passwordLabel.textContent = "Password";
@@ -187,6 +196,15 @@ export class AuthScene extends Phaser.Scene {
     this.passwordInput.placeholder = "Enter password";
     this.passwordInput.style.cssText = inputStyle;
     container.appendChild(this.passwordInput);
+
+    if (mode === "register") {
+      const passwordHint = document.createElement("div");
+      passwordHint.textContent = "At least 7 characters: letters, numbers, underscores";
+      passwordHint.style.color = "#666688";
+      passwordHint.style.fontFamily = "monospace";
+      passwordHint.style.fontSize = `${10 * scaleY}px`;
+      container.appendChild(passwordHint);
+    }
 
     this.passwordInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") this.submitForm();
@@ -246,7 +264,7 @@ export class AuthScene extends Phaser.Scene {
 
     setTimeout(() => this.usernameInput?.focus(), 100);
 
-    const submitBtnY = mode === "register" ? height * 0.72 : height * 0.62;
+    const submitBtnY = mode === "register" ? height * 0.82 : height * 0.62;
     const submitBg = this.add.rectangle(width / 2, submitBtnY, 200, 44, 0x16213e, 0.9);
     submitBg.setStrokeStyle(2, 0xe94560);
     submitBg.setInteractive({ useHandCursor: true });
@@ -270,7 +288,7 @@ export class AuthScene extends Phaser.Scene {
     });
     submitBg.on("pointerdown", () => this.submitForm());
 
-    const backBtnY = mode === "register" ? height * 0.85 : height * 0.78;
+    const backBtnY = mode === "register" ? height * 0.93 : height * 0.78;
     const backBtn = this.add.text(width / 2, backBtnY, "< Back", {
       fontSize: "14px",
       fontFamily: "monospace",
@@ -290,6 +308,29 @@ export class AuthScene extends Phaser.Scene {
     if (!usr || !pwd) {
       this.showError("Please fill in both fields");
       return;
+    }
+
+    if (this.mode === "register") {
+      if (usr.length < 3) {
+        this.showError("Username must be at least 3 characters");
+        return;
+      }
+      if (usr.length > 15) {
+        this.showError("Username must be at most 15 characters");
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(usr)) {
+        this.showError("Username can only contain letters, numbers, and underscores");
+        return;
+      }
+      if (pwd.length < 7) {
+        this.showError("Password must be at least 7 characters");
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(pwd)) {
+        this.showError("Password can only contain letters, numbers, and underscores");
+        return;
+      }
     }
 
     this.showError("Please wait...");
@@ -332,7 +373,7 @@ export class AuthScene extends Phaser.Scene {
   private showError(message: string) {
     if (this.errorText) this.errorText.destroy();
     const { width, height } = this.scale;
-    const errorY = this.mode === "register" ? height * 0.80 : height * 0.72;
+    const errorY = this.mode === "register" ? height * 0.76 : height * 0.72;
     this.errorText = this.add.text(width / 2, errorY, message, {
       fontSize: "13px",
       fontFamily: "monospace",

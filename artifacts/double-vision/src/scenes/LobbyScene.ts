@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { getBgColor } from "../GameSettings";
 import { onlineManager } from "../OnlineMultiplayerManager";
+import { hasSeenMultiplayerTutorial, showMultiplayerTutorial } from "../MultiplayerTutorial";
 
 export class LobbyScene extends Phaser.Scene {
   private statusText: Phaser.GameObjects.Text | null = null;
@@ -11,6 +12,8 @@ export class LobbyScene extends Phaser.Scene {
   private guestReady = false;
   private errorText: Phaser.GameObjects.Text | null = null;
   private view: "menu" | "host" | "join" = "menu";
+  private helpBtn: Phaser.GameObjects.Text | null = null;
+  private activeTutorial: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super({ key: "LobbyScene" });
@@ -29,6 +32,17 @@ export class LobbyScene extends Phaser.Scene {
     onlineManager.removeAllListeners();
 
     this.showMenu();
+
+    if (!hasSeenMultiplayerTutorial()) {
+      this.openTutorial();
+    }
+  }
+
+  private openTutorial() {
+    if (this.activeTutorial && this.activeTutorial.active) return;
+    this.activeTutorial = showMultiplayerTutorial(this, () => {
+      this.activeTutorial = null;
+    });
   }
 
   private cleanup() {
@@ -45,6 +59,8 @@ export class LobbyScene extends Phaser.Scene {
   private clearScene() {
     this.children.removeAll(true);
     this.removeInputElement();
+    this.helpBtn = null;
+    this.activeTutorial = null;
   }
 
   private showMenu() {
@@ -126,6 +142,25 @@ export class LobbyScene extends Phaser.Scene {
       this.cleanup();
       this.scene.start("ModeSelectScene");
     });
+
+    this.addHelpButton();
+  }
+
+  private addHelpButton() {
+    const { width } = this.scale;
+    const helpBtn = this.add.text(width - 16, 16, "? How to play", {
+      fontSize: "13px",
+      fontFamily: "monospace",
+      color: "#ffcc00",
+      backgroundColor: "#1a1a2e",
+      padding: { x: 10, y: 6 },
+    }).setOrigin(1, 0).setInteractive({ useHandCursor: true }).setDepth(50);
+    helpBtn.setStroke("#0f3460", 2);
+
+    helpBtn.on("pointerover", () => helpBtn.setColor("#ffffff"));
+    helpBtn.on("pointerout", () => helpBtn.setColor("#ffcc00"));
+    helpBtn.on("pointerdown", () => this.openTutorial());
+    this.helpBtn = helpBtn;
   }
 
   private async handleCreate() {
@@ -162,6 +197,8 @@ export class LobbyScene extends Phaser.Scene {
       this.cleanup();
       this.showMenu();
     });
+
+    this.addHelpButton();
 
     try {
       await onlineManager.connect();
@@ -349,6 +386,8 @@ export class LobbyScene extends Phaser.Scene {
       this.cleanup();
       this.showMenu();
     });
+
+    this.addHelpButton();
 
     setTimeout(() => {
       const el = document.getElementById("lobby-join-input") as HTMLInputElement;

@@ -1,4 +1,19 @@
+import type { LevelTile } from "./worlds/LevelGenerator";
+
 export type OnlineRole = "host" | "guest";
+
+export interface CustomMapData {
+  tiles: LevelTile[];
+  bgColor: string;
+  groundColor: string;
+  platformColor: string;
+}
+
+export interface PendingWorldSelection {
+  worldIndex: number;
+  seed: number;
+  customMapData?: CustomMapData;
+}
 
 export interface RemoteInputs {
   left: boolean;
@@ -7,7 +22,7 @@ export interface RemoteInputs {
   duck: boolean;
 }
 
-type MessageHandler = (msg: any) => void;
+type MessageHandler = (msg: Record<string, unknown>) => void;
 
 class OnlineMultiplayerManager {
   private ws: WebSocket | null = null;
@@ -18,17 +33,22 @@ class OnlineMultiplayerManager {
   private remoteInputs: RemoteInputs = { left: false, right: false, jump: false, duck: false };
   private _pendingWorldIndex: number | null = null;
   private _pendingWorldSeed: number | null = null;
+  private _pendingCustomMapData: CustomMapData | null = null;
 
   get role() { return this._role; }
   get roomCode() { return this._roomCode; }
   get connected() { return this._connected; }
   get pendingWorldIndex() { return this._pendingWorldIndex; }
 
-  consumePendingWorld(): { worldIndex: number; seed: number } | null {
+  consumePendingWorld(): PendingWorldSelection | null {
     if (this._pendingWorldIndex === null || this._pendingWorldSeed === null) return null;
-    const result = { worldIndex: this._pendingWorldIndex, seed: this._pendingWorldSeed };
+    const result: PendingWorldSelection = { worldIndex: this._pendingWorldIndex, seed: this._pendingWorldSeed };
+    if (this._pendingCustomMapData) {
+      result.customMapData = this._pendingCustomMapData;
+    }
     this._pendingWorldIndex = null;
     this._pendingWorldSeed = null;
+    this._pendingCustomMapData = null;
     return result;
   }
 
@@ -64,6 +84,7 @@ class OnlineMultiplayerManager {
           if (msg.type === "world_selected") {
             this._pendingWorldIndex = msg.worldIndex;
             this._pendingWorldSeed = msg.seed;
+            this._pendingCustomMapData = msg.customMapData || null;
           }
           this.emit(msg.type, msg);
         } catch {}
@@ -119,8 +140,8 @@ class OnlineMultiplayerManager {
     this.send({ type: "start_game" });
   }
 
-  sendWorldSelect(worldIndex: number, seed: number) {
-    this.send({ type: "select_world", worldIndex, seed });
+  sendWorldSelect(worldIndex: number, seed: number, customMapData?: CustomMapData) {
+    this.send({ type: "select_world", worldIndex, seed, customMapData });
   }
 
   sendStartLevel() {
@@ -188,6 +209,7 @@ class OnlineMultiplayerManager {
     this._connected = false;
     this._pendingWorldIndex = null;
     this._pendingWorldSeed = null;
+    this._pendingCustomMapData = null;
     this.resetRemoteInputs();
     if (this.ws) {
       this.ws.close();

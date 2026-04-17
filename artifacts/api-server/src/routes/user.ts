@@ -25,6 +25,7 @@ router.get("/user/data", authRequired, async (req, res) => {
         worldIndex: p.worldIndex,
         completed: p.completed,
         deaths: p.deaths,
+        deathless: p.deathless,
       })),
       accessories: accessories.map(a => ({
         accessoryId: a.accessoryId,
@@ -35,6 +36,7 @@ router.get("/user/data", authRequired, async (req, res) => {
         totalCoinsSpent: userStatsRow.totalCoinsSpent,
         totalDeaths: userStatsRow.totalDeaths,
         totalLevelCompletions: userStatsRow.totalLevelCompletions,
+        totalLevelsCreated: userStatsRow.totalLevelsCreated,
       } : null,
     });
   } catch (err) {
@@ -63,7 +65,7 @@ router.post("/user/coins", authRequired, async (req, res) => {
 router.post("/user/progress", authRequired, async (req, res) => {
   try {
     const userId = req.user!.userId;
-    const { worldIndex, completed, deaths } = req.body;
+    const { worldIndex, completed, deaths, deathless } = req.body;
     if (typeof worldIndex !== "number" || !Number.isInteger(worldIndex) || worldIndex < 0 || worldIndex > 9) {
       res.status(400).json({ error: "Invalid world index" });
       return;
@@ -76,6 +78,10 @@ router.post("/user/progress", authRequired, async (req, res) => {
       res.status(400).json({ error: "deaths must be a non-negative integer" });
       return;
     }
+    if (deathless !== undefined && typeof deathless !== "boolean") {
+      res.status(400).json({ error: "deathless must be a boolean" });
+      return;
+    }
 
     const existing = await db.select().from(userProgressTable)
       .where(and(eq(userProgressTable.userId, userId), eq(userProgressTable.worldIndex, worldIndex)))
@@ -83,7 +89,11 @@ router.post("/user/progress", authRequired, async (req, res) => {
 
     if (existing.length > 0) {
       await db.update(userProgressTable)
-        .set({ completed: completed ?? existing[0].completed, deaths: deaths ?? existing[0].deaths })
+        .set({
+          completed: completed ?? existing[0].completed,
+          deaths: deaths ?? existing[0].deaths,
+          deathless: deathless === undefined ? existing[0].deathless : deathless,
+        })
         .where(and(eq(userProgressTable.userId, userId), eq(userProgressTable.worldIndex, worldIndex)));
     } else {
       await db.insert(userProgressTable).values({
@@ -91,6 +101,7 @@ router.post("/user/progress", authRequired, async (req, res) => {
         worldIndex,
         completed: completed ?? false,
         deaths: deaths ?? 0,
+        deathless: deathless === true,
       });
     }
 
@@ -143,9 +154,9 @@ router.post("/user/accessories", authRequired, async (req, res) => {
 router.post("/user/stats", authRequired, async (req, res) => {
   try {
     const userId = req.user!.userId;
-    const { totalCoinsEarned, totalCoinsSpent, totalDeaths, totalLevelCompletions } = req.body;
+    const { totalCoinsEarned, totalCoinsSpent, totalDeaths, totalLevelCompletions, totalLevelsCreated } = req.body;
 
-    const fields = { totalCoinsEarned, totalCoinsSpent, totalDeaths, totalLevelCompletions };
+    const fields = { totalCoinsEarned, totalCoinsSpent, totalDeaths, totalLevelCompletions, totalLevelsCreated };
     for (const [key, val] of Object.entries(fields)) {
       if (typeof val !== "number" || !Number.isInteger(val) || val < 0 || val > 99999999) {
         res.status(400).json({ error: `Invalid value for ${key}` });
@@ -164,6 +175,7 @@ router.post("/user/stats", authRequired, async (req, res) => {
           totalCoinsSpent: sql`GREATEST(${userStatsTable.totalCoinsSpent}, ${totalCoinsSpent})`,
           totalDeaths: sql`GREATEST(${userStatsTable.totalDeaths}, ${totalDeaths})`,
           totalLevelCompletions: sql`GREATEST(${userStatsTable.totalLevelCompletions}, ${totalLevelCompletions})`,
+          totalLevelsCreated: sql`GREATEST(${userStatsTable.totalLevelsCreated}, ${totalLevelsCreated})`,
         })
         .where(eq(userStatsTable.userId, userId));
     } else {
@@ -173,6 +185,7 @@ router.post("/user/stats", authRequired, async (req, res) => {
         totalCoinsSpent,
         totalDeaths,
         totalLevelCompletions,
+        totalLevelsCreated,
       });
     }
 

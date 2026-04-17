@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { WORLDS } from "../worlds/WorldConfig";
 import type { GameMode } from "./ModeSelectScene";
 import { onlineManager } from "../OnlineMultiplayerManager";
+import type { LevelTile } from "../worlds/LevelGenerator";
 import { getInputMode } from "../GameSettings";
 
 interface HazardEntry {
@@ -302,11 +303,14 @@ export class WarningScene extends Phaser.Scene {
     super({ key: "WarningScene" });
   }
 
-  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode; levelSeed?: number }) {
+  create(data: { worldIndex: number; deaths: number; startTime: number; gameMode: GameMode; levelSeed?: number; customTiles?: LevelTile[]; customBgColor?: string; customGroundColor?: string; customPlatformColor?: string }) {
     const { width, height } = this.scale;
     const world = WORLDS[data.worldIndex];
 
-    this.cameras.main.setBackgroundColor(Phaser.Display.Color.IntegerToColor(world.bgColor).rgba);
+    const bgColorVal = data.customBgColor
+      ? data.customBgColor
+      : Phaser.Display.Color.IntegerToColor(world.bgColor).rgba;
+    this.cameras.main.setBackgroundColor(bgColorVal);
 
     const homeBtn = this.add.text(width - 16, 16, "[ Home ]", {
       fontSize: "14px",
@@ -320,14 +324,15 @@ export class WarningScene extends Phaser.Scene {
     homeBtn.on("pointerout", () => homeBtn.setColor("#cccccc"));
     homeBtn.on("pointerdown", () => this.scene.start("TitleScene", { gameMode: data.gameMode }));
 
-    const worldNum = this.add.text(width / 2, height * 0.15, `WORLD ${data.worldIndex + 1}`, {
+    const isCustom = !!data.customTiles;
+    const worldNum = this.add.text(width / 2, height * 0.15, isCustom ? "CUSTOM MAP" : `WORLD ${data.worldIndex + 1}`, {
       fontSize: "20px",
       fontFamily: "monospace",
       color: "#aaaaaa",
     });
     worldNum.setOrigin(0.5);
 
-    const title = this.add.text(width / 2, height * 0.28, world.name.toUpperCase(), {
+    const title = this.add.text(width / 2, height * 0.28, isCustom ? "CUSTOM MAP" : world.name.toUpperCase(), {
       fontSize: "42px",
       fontFamily: "monospace",
       color: "#ffffff",

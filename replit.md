@@ -60,6 +60,15 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - Settings accessible from TitleScene gear icon and in-game pause menu
 - All settings persist in localStorage
 
+### Custom Map Builder
+- "Create Map" button on TitleScene (disabled for guests with "log in" message)
+- "My Maps" button opens a modal listing saved maps with play/edit/delete actions
+- MapEditorScene: scrollable grid editor (200×15 tiles at 32px), tile palette toolbar, background/ground/platform color pickers
+- Custom maps saved to server via REST API, stored as JSON tile data
+- Playable in all modes (single, local co-op, online co-op)
+- For online co-op, custom tile data is sent to partner via WebSocket
+- Maps use same LevelTile format as procedural levels
+
 ### Key Files
 - `src/main.ts` - Phaser config and game initialization
 - `src/KeyBindings.ts` - Key binding configuration module with localStorage persistence
@@ -73,10 +82,11 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - `src/OnlineMultiplayerManager.ts` - WebSocket client singleton for online co-op room management and input relay
 - `src/scenes/ModeSelectScene.ts` - Mode select with Single Player, Local Co-op, Online Co-op
 - `src/scenes/LobbyScene.ts` - Online co-op lobby (Create Room / Join Room)
-- `src/scenes/TitleScene.ts` - Title screen with world gallery, controls display, settings modal, and shop button
+- `src/scenes/TitleScene.ts` - Title screen with world gallery, controls display, settings modal, map builder buttons
+- `src/scenes/MapEditorScene.ts` - Map editor with grid canvas, tile palette, color pickers, save/load
 - `src/scenes/ShopScene.ts` - Accessory shop with category tabs, buy/equip/remove, character preview
 - `src/scenes/WarningScene.ts` - Pre-world hazard warning
-- `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints, pause menu, online input handling
+- `src/scenes/GameScene.ts` - Core gameplay with physics, hazards, checkpoints, pause menu, online input handling, custom map support
 - `src/scenes/WinScene.ts` - Victory screen with stats (shown when all 4 worlds complete)
 - `src/worlds/WorldConfig.ts` - World definitions and physics constants
 - `src/worlds/LevelGenerator.ts` - Procedural level generation
@@ -95,6 +105,12 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - POST `/api/user/coins` - Update coin balance
 - POST `/api/user/progress` - Update world progress
 - POST `/api/user/accessories` - Update owned/equipped accessories
+- POST `/api/user/stats` - Update all-time stats
+- GET `/api/user/maps` - List user's custom maps
+- GET `/api/user/maps/:id` - Get a specific custom map with tile data
+- POST `/api/user/maps` - Create a new custom map
+- PUT `/api/user/maps/:id` - Update an existing custom map
+- DELETE `/api/user/maps/:id` - Delete a custom map
 - Auth middleware extracts user from Bearer token in Authorization header
 - Dependencies: bcryptjs, jsonwebtoken
 
@@ -102,6 +118,7 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - `users` table: id, username, password_hash, coins, created_at, updated_at
 - `user_progress` table: id, user_id, world_index, completed, deaths (unique on user_id + world_index)
 - `user_accessories` table: id, user_id, accessory_id, equipped (unique on user_id + accessory_id)
+- `custom_maps` table: id, user_id, name, tile_data (JSON), bg_color, ground_color, platform_color, created_at, updated_at
 
 ### WebSocket Room Management
 - WebSocket server attached to HTTP server at `/api/ws`

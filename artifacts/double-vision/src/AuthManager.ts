@@ -101,7 +101,7 @@ export async function registerRequest(usr: string, pwd: string): Promise<{ succe
   }
 }
 
-export async function loadUserData(): Promise<{ coins: number; progress: any[]; accessories: any[]; stats: { totalCoinsEarned: number; totalCoinsSpent: number; totalDeaths: number; totalLevelCompletions: number } | null } | null> {
+export async function loadUserData(): Promise<{ coins: number; progress: Array<{ worldIndex: number; completed: boolean; deaths: number; deathless?: boolean }>; accessories: any[]; stats: { totalCoinsEarned: number; totalCoinsSpent: number; totalDeaths: number; totalLevelCompletions: number; totalLevelsCreated: number } | null } | null> {
   if (!isLoggedIn()) return null;
   try {
     const res = await apiRequest("/user/data");
@@ -124,12 +124,12 @@ export async function syncCoins(coins: number): Promise<void> {
   } catch {}
 }
 
-export async function syncProgress(worldIndex: number, completed: boolean, deaths: number): Promise<void> {
+export async function syncProgress(worldIndex: number, completed: boolean, deaths: number, deathless: boolean = false): Promise<void> {
   if (!isLoggedIn()) return;
   try {
     await apiRequest("/user/progress", {
       method: "POST",
-      body: JSON.stringify({ worldIndex, completed, deaths }),
+      body: JSON.stringify({ worldIndex, completed, deaths, deathless }),
     });
   } catch {}
 }
@@ -144,7 +144,7 @@ export async function syncAccessories(owned: string[], equipped: Record<string, 
   } catch {}
 }
 
-export async function syncStats(stats: { totalCoinsEarned: number; totalCoinsSpent: number; totalDeaths: number; totalLevelCompletions: number }): Promise<void> {
+export async function syncStats(stats: { totalCoinsEarned: number; totalCoinsSpent: number; totalDeaths: number; totalLevelCompletions: number; totalLevelsCreated: number }): Promise<void> {
   if (!isLoggedIn()) return;
   try {
     await apiRequest("/user/stats", {

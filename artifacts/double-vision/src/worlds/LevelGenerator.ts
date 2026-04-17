@@ -3,8 +3,9 @@ import { TILE, LEVEL_WIDTH, LEVEL_HEIGHT, CHECKPOINT_COUNT, type WorldConfig } f
 export interface LevelTile {
   x: number;
   y: number;
-  type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint" | "cave" | "secret";
+  type: "ground" | "platform" | "kill" | "spike" | "movement" | "checkpoint" | "cave" | "secret" | "finish";
   width?: number;
+  dir?: "left" | "right" | "up" | "down";
 }
 
 function seededRandom(seed: number) {

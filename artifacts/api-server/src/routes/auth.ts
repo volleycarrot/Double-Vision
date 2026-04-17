@@ -28,16 +28,32 @@ router.post("/auth/register", async (req, res) => {
       res.status(400).json({ error: "Username and password are required" });
       return;
     }
-    if (typeof username !== "string" || username.length < 3 || username.length > 20) {
-      res.status(400).json({ error: "Username must be 3-20 characters" });
+    if (typeof username !== "string") {
+      res.status(400).json({ error: "Username must be a string" });
       return;
     }
-    if (typeof password !== "string" || password.length < 4) {
-      res.status(400).json({ error: "Password must be at least 4 characters" });
+    if (username.length < 3) {
+      res.status(400).json({ error: "Username must be at least 3 characters" });
+      return;
+    }
+    if (username.length > 15) {
+      res.status(400).json({ error: "Username must be at most 15 characters" });
       return;
     }
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       res.status(400).json({ error: "Username can only contain letters, numbers, and underscores" });
+      return;
+    }
+    if (typeof password !== "string") {
+      res.status(400).json({ error: "Password must be a string" });
+      return;
+    }
+    if (password.length < 7) {
+      res.status(400).json({ error: "Password must be at least 7 characters" });
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(password)) {
+      res.status(400).json({ error: "Password can only contain letters, numbers, and underscores" });
       return;
     }
     if (isInappropriateUsername(username)) {
