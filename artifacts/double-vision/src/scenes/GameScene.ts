@@ -347,6 +347,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const handleResize = () => {
+      pauseBtn.setPosition(this.cameras.main.width / 2, pauseBtnY);
       if (this.touchControls) {
         this.touchControls.reposition();
         if (!this.isPaused && !this.isDead) {
@@ -383,16 +384,59 @@ export class GameScene extends Phaser.Scene {
       color: "#ffffff",
     }).setScrollFactor(0).setDepth(100);
 
-    const pauseBtn = this.add.text(this.cameras.main.width / 2, 16, "[ || ]", {
-      fontSize: "16px",
-      fontFamily: "monospace",
-      color: "#cccccc",
-      backgroundColor: "#0a0a1e",
-      padding: { x: 8, y: 4 },
-    }).setScrollFactor(0).setDepth(100).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
-    pauseBtn.on("pointerover", () => pauseBtn.setColor("#ffffff"));
-    pauseBtn.on("pointerout", () => pauseBtn.setColor("#cccccc"));
-    pauseBtn.on("pointerdown", () => this.togglePause());
+    const pauseBtnW = 38;
+    const pauseBtnH = 30;
+    const pauseBtnX = this.cameras.main.width / 2;
+    const pauseBtnY = 16;
+
+    const pauseBtn = this.add.graphics();
+    const drawPauseBtn = (hovered: boolean, pressed: boolean) => {
+      pauseBtn.clear();
+      const bgAlpha = pressed ? 0.95 : hovered ? 0.9 : 0.75;
+      pauseBtn.fillStyle(0x0a0a1e, bgAlpha);
+      pauseBtn.fillRoundedRect(-pauseBtnW / 2, 0, pauseBtnW, pauseBtnH, 7);
+      const borderColor = pressed ? 0xffffff : hovered ? 0x00e5ff : 0x336688;
+      const borderThick = hovered || pressed ? 2 : 1.5;
+      const borderAlpha = hovered || pressed ? 1.0 : 0.7;
+      pauseBtn.lineStyle(borderThick, borderColor, borderAlpha);
+      pauseBtn.strokeRoundedRect(-pauseBtnW / 2, 0, pauseBtnW, pauseBtnH, 7);
+      const barColor = pressed ? 0xffffff : hovered ? 0x00e5ff : 0xaaccdd;
+      pauseBtn.fillStyle(barColor, 1);
+      pauseBtn.fillRect(-8, 8, 5, 14);
+      pauseBtn.fillRect(3, 8, 5, 14);
+    };
+
+    drawPauseBtn(false, false);
+    pauseBtn.setPosition(pauseBtnX, pauseBtnY)
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setInteractive(
+        new Phaser.Geom.Rectangle(-pauseBtnW / 2, 0, pauseBtnW, pauseBtnH),
+        Phaser.Geom.Rectangle.Contains
+      );
+    pauseBtn.input!.cursor = "pointer";
+
+    let pauseBtnHovered = false;
+    pauseBtn.on("pointerover", () => {
+      pauseBtnHovered = true;
+      drawPauseBtn(true, false);
+      this.tweens.add({ targets: pauseBtn, scaleX: 1.1, scaleY: 1.1, duration: 100, ease: "Sine.easeOut" });
+    });
+    pauseBtn.on("pointerout", () => {
+      pauseBtnHovered = false;
+      drawPauseBtn(false, false);
+      this.tweens.add({ targets: pauseBtn, scaleX: 1, scaleY: 1, duration: 100, ease: "Sine.easeOut" });
+    });
+    pauseBtn.on("pointerdown", () => {
+      drawPauseBtn(false, true);
+      this.tweens.add({ targets: pauseBtn, scaleX: 0.92, scaleY: 0.92, duration: 80, ease: "Sine.easeOut" });
+      this.togglePause();
+    });
+    pauseBtn.on("pointerup", () => {
+      drawPauseBtn(pauseBtnHovered, false);
+      const toScale = pauseBtnHovered ? 1.1 : 1;
+      this.tweens.add({ targets: pauseBtn, scaleX: toScale, scaleY: toScale, duration: 80, ease: "Sine.easeOut" });
+    });
 
     this.deathText = this.add.text(784, 16, `Deaths: ${this.deaths}`, {
       fontSize: "16px",
