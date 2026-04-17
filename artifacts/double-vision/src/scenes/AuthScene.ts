@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { getBgColor, setInputMode, type InputMode } from "../GameSettings";
-import { loginRequest, registerRequest, isLoggedIn, loadUserData } from "../AuthManager";
+import { loginRequest, registerRequest, isLoggedIn, loadUserData, broadcastAuthChange } from "../AuthManager";
 import { loadServerData as loadServerCoins } from "../CoinManager";
 import { loadServerData as loadServerProgress } from "../ProgressManager";
 import { loadServerData as loadServerAccessories } from "../AccessoryManager";
@@ -354,6 +354,10 @@ export class AuthScene extends Phaser.Scene {
     try {
       const data = await loadUserData();
       if (data) {
+        // At this point managers still hold guest in-memory state, but
+        // getStorageKey() already returns the account namespace because
+        // setAuth() was called. So loadServerData writes merged results
+        // to account-scoped keys, preserving guest-vs-server merge logic.
         loadServerCoins(data.coins);
         loadServerProgress(data.progress);
         loadServerAccessories(data.accessories);
@@ -362,6 +366,9 @@ export class AuthScene extends Phaser.Scene {
         }
       }
     } catch {}
+    // Notify managers to reload their in-memory state from the account
+    // namespace, which now contains the fully merged data.
+    broadcastAuthChange();
     this.scene.start("InputModeSelectScene");
   }
 

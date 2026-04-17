@@ -1,7 +1,5 @@
-import { isLoggedIn, syncStats } from "./AuthManager";
+import { isLoggedIn, syncStats, getStorageKey, onAuthChange } from "./AuthManager";
 import { emitProgressChange } from "./EventBus";
-
-const STORAGE_KEY = "double-vision-stats";
 
 export interface AllTimeStats {
   totalCoinsEarned: number;
@@ -23,9 +21,14 @@ function defaultStats(): AllTimeStats {
 
 let stats: AllTimeStats = loadStats();
 
+onAuthChange(() => {
+  stats = loadStats();
+  emitProgressChange();
+});
+
 function loadStats(): AllTimeStats {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey("stats"));
     if (!raw) return defaultStats();
     const parsed = JSON.parse(raw);
     const result = defaultStats();
@@ -47,7 +50,7 @@ function loadStats(): AllTimeStats {
 
 function save(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+    localStorage.setItem(getStorageKey("stats"), JSON.stringify(stats));
   } catch {}
   if (isLoggedIn()) {
     syncStats(stats);
@@ -95,7 +98,7 @@ export function loadServerData(serverStats: Partial<AllTimeStats>): void {
   merged.totalLevelsCreated = Math.max(stats.totalLevelsCreated, serverStats.totalLevelsCreated ?? 0);
   stats = merged;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+    localStorage.setItem(getStorageKey("stats"), JSON.stringify(stats));
   } catch {}
   const localExceedsServer =
     merged.totalCoinsEarned > (serverStats.totalCoinsEarned ?? 0) ||

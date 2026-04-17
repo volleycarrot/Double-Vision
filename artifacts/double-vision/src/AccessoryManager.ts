@@ -1,12 +1,11 @@
 import Phaser from "phaser";
 import { EYE, getEyeOffsetY } from "./PlayerConfig";
-import { isLoggedIn, syncAccessories } from "./AuthManager";
+import { isLoggedIn, syncAccessories, getStorageKey, onAuthChange } from "./AuthManager";
 import { getStats } from "./StatsManager";
 import { deathlessWorldCount, allWorldsDeathless } from "./ProgressManager";
 import { onProgressChange, dispatchSpecialUnlocked } from "./EventBus";
 import { WORLDS } from "./worlds/WorldConfig";
 
-const STORAGE_KEY = "double-vision-accessories";
 const SPECIAL_PREFIX = "special:";
 
 export interface Accessory {
@@ -211,14 +210,9 @@ function migrateState(s: AccessoryState): AccessoryState {
   return s;
 }
 
-let state: AccessoryState = migrateState(loadState());
-try {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-} catch {}
-
 function loadState(): AccessoryState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey("accessories"));
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw) as Partial<AccessoryState>;
     const base = defaultState();
@@ -238,9 +232,22 @@ function loadState(): AccessoryState {
   }
 }
 
+let state: AccessoryState = migrateState(loadState());
+try {
+  localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
+} catch {}
+
+onAuthChange(() => {
+  state = migrateState(loadState());
+  try {
+    localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
+  } catch {}
+  checkSpecialUnlocks();
+});
+
 function save(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
   } catch {}
   if (isLoggedIn()) {
     const equippedMap: Record<string, boolean> = {};
@@ -466,7 +473,7 @@ export function loadServerData(serverAccessories: Array<{ accessoryId: string; e
     }
   }
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
   } catch {}
 
   save();
