@@ -146,28 +146,7 @@ start_api() {
 }
 
 # ============================================================
-# 5. Add Vite proxy for /api -> API server
-# ============================================================
-inject_vite_proxy() {
-  # Inject proxy config into vite.config.ts so /api and /api/ws
-  # are forwarded to the API server running on API_PORT.
-  # Only patch if not already patched.
-  local vite_config="/workspace/artifacts/double-vision/vite.config.ts"
-  if ! grep -q "'/api'" "$vite_config" 2>/dev/null; then
-    cp "$vite_config" /tmp/vite-config-original.ts
-    sed -i "s|server: {|server: {\n    proxy: {\n      '/api': {\n        target: 'http://localhost:$API_PORT',\n        ws: true,\n      },\n    },|" "$vite_config"
-  fi
-}
-
-restore_vite_config() {
-  if [ -f /tmp/vite-config-original.ts ]; then
-    cp /tmp/vite-config-original.ts /workspace/artifacts/double-vision/vite.config.ts
-  fi
-}
-trap restore_vite_config EXIT
-
-# ============================================================
-# 6. Dispatch
+# 5. Dispatch
 # ============================================================
 case "${1:-dev}" in
   dev)
@@ -175,7 +154,6 @@ case "${1:-dev}" in
     start_postgres
     push_schema
     start_api
-    inject_vite_proxy
     cd /workspace
     exec pnpm --filter @workspace/double-vision run dev
     ;;
