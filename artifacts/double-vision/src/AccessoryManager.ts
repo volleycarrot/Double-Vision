@@ -433,39 +433,39 @@ onProgressChange(() => {
 checkSpecialUnlocks();
 
 export function loadServerData(serverAccessories: Array<{ accessoryId: string; equipped: boolean }>): void {
-  const mergedOwned = new Set<string>(state.owned);
-  const mergedSpecials = new Set<string>(state.ownedSpecials);
-  const mergedEquipped: Record<string, string | null> = { ...state.equipped };
-  let mergedEquippedSpecial: string | null = state.equippedSpecial;
+  const replacedOwned = new Set<string>();
+  const replacedSpecials = new Set<string>();
+  const replacedEquipped: Record<string, string | null> = { hat: null, glasses: null, neckwear: null };
+  let replacedEquippedSpecial: string | null = null;
 
   for (const sa of serverAccessories) {
     if (sa.accessoryId.startsWith(SPECIAL_PREFIX)) {
       const sid = sa.accessoryId.slice(SPECIAL_PREFIX.length);
       if (SPECIALS.some(s => s.id === sid)) {
-        mergedSpecials.add(sid);
-        if (sa.equipped) mergedEquippedSpecial = sid;
+        replacedSpecials.add(sid);
+        if (sa.equipped) replacedEquippedSpecial = sid;
       }
       continue;
     }
     const remappedId = sa.accessoryId === "halo" ? "glowring" : sa.accessoryId;
-    mergedOwned.add(remappedId);
+    replacedOwned.add(remappedId);
     if (sa.equipped) {
       const acc = ACCESSORIES.find(a => a.id === remappedId);
       if (acc) {
-        mergedEquipped[acc.category] = remappedId;
+        replacedEquipped[acc.category] = remappedId;
       }
     }
   }
 
   state = {
     ...state,
-    owned: [...mergedOwned],
-    equipped: mergedEquipped,
-    ownedSpecials: [...mergedSpecials],
-    equippedSpecial: mergedEquippedSpecial,
+    owned: [...replacedOwned],
+    equipped: replacedEquipped,
+    ownedSpecials: [...replacedSpecials],
+    equippedSpecial: replacedEquippedSpecial,
   };
-  if (mergedEquippedSpecial) {
-    const sp = SPECIALS.find(s => s.id === mergedEquippedSpecial);
+  if (replacedEquippedSpecial) {
+    const sp = SPECIALS.find(s => s.id === replacedEquippedSpecial);
     if (sp) {
       for (const slot of sp.slots) {
         state.equipped[slot] = null;

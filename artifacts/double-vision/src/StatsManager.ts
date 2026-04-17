@@ -90,23 +90,14 @@ export function recordLevelCreated(): void {
 }
 
 export function loadServerData(serverStats: Partial<AllTimeStats>): void {
-  const merged = defaultStats();
-  merged.totalCoinsEarned = Math.max(stats.totalCoinsEarned, serverStats.totalCoinsEarned ?? 0);
-  merged.totalCoinsSpent = Math.max(stats.totalCoinsSpent, serverStats.totalCoinsSpent ?? 0);
-  merged.totalDeaths = Math.max(stats.totalDeaths, serverStats.totalDeaths ?? 0);
-  merged.totalLevelCompletions = Math.max(stats.totalLevelCompletions, serverStats.totalLevelCompletions ?? 0);
-  merged.totalLevelsCreated = Math.max(stats.totalLevelsCreated, serverStats.totalLevelsCreated ?? 0);
-  stats = merged;
+  const replaced = defaultStats();
+  replaced.totalCoinsEarned = serverStats.totalCoinsEarned ?? 0;
+  replaced.totalCoinsSpent = serverStats.totalCoinsSpent ?? 0;
+  replaced.totalDeaths = serverStats.totalDeaths ?? 0;
+  replaced.totalLevelCompletions = serverStats.totalLevelCompletions ?? 0;
+  replaced.totalLevelsCreated = serverStats.totalLevelsCreated ?? 0;
+  stats = replaced;
   try {
     localStorage.setItem(getStorageKey("stats"), JSON.stringify(stats));
   } catch {}
-  const localExceedsServer =
-    merged.totalCoinsEarned > (serverStats.totalCoinsEarned ?? 0) ||
-    merged.totalCoinsSpent > (serverStats.totalCoinsSpent ?? 0) ||
-    merged.totalDeaths > (serverStats.totalDeaths ?? 0) ||
-    merged.totalLevelCompletions > (serverStats.totalLevelCompletions ?? 0) ||
-    merged.totalLevelsCreated > (serverStats.totalLevelsCreated ?? 0);
-  if (localExceedsServer && isLoggedIn()) {
-    syncStats(stats);
-  }
 }

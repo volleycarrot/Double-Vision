@@ -354,16 +354,17 @@ export class AuthScene extends Phaser.Scene {
     try {
       const data = await loadUserData();
       if (data) {
-        // At this point managers still hold guest in-memory state, but
-        // getStorageKey() already returns the account namespace because
-        // setAuth() was called. So loadServerData writes merged results
-        // to account-scoped keys, preserving guest-vs-server merge logic.
+        // Hydration order matters for checkSpecialUnlocks() correctness.
+        // Two paths invoke it during hydration:
+        //   1. loadServerProgress → emitProgressChange → onProgressChange → checkSpecialUnlocks
+        //   2. loadServerAccessories calls checkSpecialUnlocks directly
+        // checkSpecialUnlocks reads both getStats() and state.ownedSpecials, so
+        // stats and accessories must both reflect the new account before progress
+        // is loaded. Load order: coins (independent), stats, accessories, progress.
         loadServerCoins(data.coins);
-        loadServerProgress(data.progress);
+        loadServerStats(data.stats ?? {});
         loadServerAccessories(data.accessories);
-        if (data.stats) {
-          loadServerStats(data.stats);
-        }
+        loadServerProgress(data.progress);
       }
     } catch {}
     // Notify managers to reload their in-memory state from the account
