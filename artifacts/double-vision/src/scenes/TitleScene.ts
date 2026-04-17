@@ -593,11 +593,11 @@ export class TitleScene extends Phaser.Scene {
   }
 
   private addShopButton(leftCenterX: number, height: number) {
-    const shopX = leftCenterX;
-    const shopY = height * 0.32;
-
     const btnWidth = 110;
     const btnHeight = 36;
+    const gap = 8;
+    const shopX = leftCenterX - (btnWidth + gap) / 2;
+    const shopY = height * 0.32;
 
     const shopBg = this.add.rectangle(shopX, shopY, btnWidth, btnHeight, 0x16213e, 0.9);
     shopBg.setStrokeStyle(2, 0x0f3460);
@@ -630,7 +630,8 @@ export class TitleScene extends Phaser.Scene {
   private addBrowseMapsButton(leftCenterX: number, height: number) {
     const btnWidth = 110;
     const btnHeight = 36;
-    const browseX = leftCenterX + btnWidth + 8;
+    const gap = 8;
+    const browseX = leftCenterX + (btnWidth + gap) / 2;
     const browseY = height * 0.32;
 
     const browseBg = this.add.rectangle(browseX, browseY, btnWidth, btnHeight, 0x0a1a33, 0.9);
