@@ -7,11 +7,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip \
     tmux procps file less util-linux vim-tiny htop bat \
     bash-completion lsof strace net-tools \
+    postgresql postgresql-client \
     && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen \
     && locale-gen \
     && rm -rf /var/lib/apt/lists/*
 
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+
+# === Layer 1b: PostgreSQL trust auth for local connections ===
+RUN PG_CONF=$(find /etc/postgresql -name postgresql.conf 2>/dev/null | head -1) && \
+    PG_HBA=$(find /etc/postgresql -name pg_hba.conf 2>/dev/null | head -1) && \
+    if [ -n "$PG_CONF" ]; then \
+      sed -i "s/^#listen_addresses.*/listen_addresses = 'localhost'/" "$PG_CONF"; \
+    fi && \
+    if [ -n "$PG_HBA" ]; then \
+      printf "local all all trust\nhost all all 127.0.0.1/32 trust\n" > "$PG_HBA"; \
+    fi
 
 # === Layer 2: pnpm + Claude Code ===
 ENV COREPACK_ENABLE_AUTO_PIN=0
@@ -31,7 +42,8 @@ RUN if [ "$USER_UID" != "1000" ]; then \
     && chmod 0440 /etc/sudoers.d/agent
 
 # === Layer 4: Working directory + symlinks ===
-RUN mkdir -p /workspace && chown "$USER_UID":"$USER_UID" /workspace 2>/dev/null || true
+RUN mkdir -p /workspace /pgdata \
+    && chown "$USER_UID":"$USER_UID" /workspace /pgdata 2>/dev/null || true
 RUN ln -sf /usr/bin/batcat /usr/local/bin/bat \
     && ln -sf /opt/ateam/ateam-linux-amd64 /usr/local/bin/ateam
 

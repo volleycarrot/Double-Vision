@@ -21,16 +21,21 @@ done
 source "$ENV_FILE"
 
 APP_PORT="${DOCKER_APP_PORT}"
+API_PORT="${DOCKER_API_PORT:-5000}"
+PG_PORT="${DOCKER_PG_PORT:-5432}"
 CONTAINER="${DOCKER_CONTAINER_NAME}"
 IMAGE="${DOCKER_IMAGE_NAME}"
 
 DOCKER_RUN_ARGS=(
   -e "PORT=$APP_PORT"
+  -e "API_PORT=$API_PORT"
+  -e "PG_PORT=$PG_PORT"
   -e "BASE_PATH=/"
   -e "TZ=${TZ:-$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||' || echo UTC)}"
   -v "$PROJECT_DIR:/workspace"
   -v "${CONTAINER}-node-modules:/workspace/node_modules"
   -v "${CONTAINER}-claude-home:/home/agent/.claude"
+  -v "${CONTAINER}-pgdata:/pgdata"
   -p "${APP_PORT}:${APP_PORT}"
 )
 
