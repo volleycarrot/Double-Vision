@@ -87,7 +87,16 @@ export function logout(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USERNAME_KEY);
   } catch {}
-  // Notify immediately on logout so managers switch back to guest namespace
+  // Clear the shared guest-namespace save keys so the next guest session
+  // (or the next logged-in session before server data is loaded) always
+  // starts from a true zero state instead of the previous account's leftovers.
+  for (const base of ["coins", "progress", "stats", "accessories"]) {
+    try {
+      localStorage.removeItem(`double-vision-${base}`);
+    } catch {}
+  }
+  // Notify immediately on logout so managers reload from the now-cleared
+  // guest namespace and reflect a clean default state without a page refresh.
   broadcastAuthChange();
 }
 
