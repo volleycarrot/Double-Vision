@@ -176,7 +176,7 @@ export class AuthScene extends Phaser.Scene {
 
     if (mode === "register") {
       const usernameHint = document.createElement("div");
-      usernameHint.textContent = "3-15 characters: letters, numbers, underscores";
+      usernameHint.textContent = "3-15 characters";
       usernameHint.style.color = "#666688";
       usernameHint.style.fontFamily = "monospace";
       usernameHint.style.fontSize = `${10 * scaleY}px`;
@@ -199,7 +199,7 @@ export class AuthScene extends Phaser.Scene {
 
     if (mode === "register") {
       const passwordHint = document.createElement("div");
-      passwordHint.textContent = "At least 7 characters: letters, numbers, underscores";
+      passwordHint.textContent = "At least 7 characters";
       passwordHint.style.color = "#666688";
       passwordHint.style.fontFamily = "monospace";
       passwordHint.style.fontSize = `${10 * scaleY}px`;
@@ -319,16 +319,8 @@ export class AuthScene extends Phaser.Scene {
         this.showError("Username must be at most 15 characters");
         return;
       }
-      if (!/^[a-zA-Z0-9_]+$/.test(usr)) {
-        this.showError("Username can only contain letters, numbers, and underscores");
-        return;
-      }
       if (pwd.length < 7) {
         this.showError("Password must be at least 7 characters");
-        return;
-      }
-      if (!/^[a-zA-Z0-9_]+$/.test(pwd)) {
-        this.showError("Password can only contain letters, numbers, and underscores");
         return;
       }
     }
