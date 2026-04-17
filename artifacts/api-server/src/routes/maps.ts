@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, customMapsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
-import { authRequired } from "../middleware/auth";
+import { db, customMapsTable, mapLikesTable, usersTable } from "@workspace/db";
+import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm";
+import type { Request, Response, NextFunction } from "express";
+import { authRequired, verifyToken } from "../middleware/auth";
 
 const VALID_TILE_TYPES = new Set(["ground", "platform", "kill", "spike", "movement", "checkpoint", "cave", "secret", "finish"]);
 const VALID_DIRS = new Set(["up", "down", "left", "right"]);
@@ -29,6 +30,19 @@ function validateTileArray(tiles: RawTile[]): string | null {
   return null;
 }
 
+function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (header && header.startsWith("Bearer ")) {
+    const token = header.slice(7);
+    try {
+      req.user = verifyToken(token);
+    } catch {
+      // ignore invalid tokens for optional auth
+    }
+  }
+  next();
+}
+
 const router: IRouter = Router();
 
 router.get("/user/maps", authRequired, async (req, res) => {
@@ -40,6 +54,7 @@ router.get("/user/maps", authRequired, async (req, res) => {
       bgColor: customMapsTable.bgColor,
       groundColor: customMapsTable.groundColor,
       platformColor: customMapsTable.platformColor,
+      isPublic: customMapsTable.isPublic,
       createdAt: customMapsTable.createdAt,
       updatedAt: customMapsTable.updatedAt,
     }).from(customMapsTable)
@@ -82,7 +97,7 @@ router.get("/user/maps/:id", authRequired, async (req, res) => {
 router.post("/user/maps", authRequired, async (req, res) => {
   try {
     const userId = req.user!.userId;
-    const { name, tileData, bgColor, groundColor, platformColor } = req.body;
+    const { name, tileData, bgColor, groundColor, platformColor, isPublic } = req.body;
 
     if (!name || typeof name !== "string" || name.length < 1 || name.length > 50) {
       res.status(400).json({ error: "Name must be 1-50 characters" });
@@ -139,6 +154,7 @@ router.post("/user/maps", authRequired, async (req, res) => {
       bgColor: bgColor || "#1a1a2e",
       groundColor: groundColor || "#3a3a3a",
       platformColor: platformColor || "#4a4a4a",
+      isPublic: isPublic === true ? true : false,
     }).returning();
 
     res.json({ map: { id: inserted.id, name: inserted.name } });
@@ -167,8 +183,8 @@ router.put("/user/maps/:id", authRequired, async (req, res) => {
       return;
     }
 
-    const { name, tileData, bgColor, groundColor, platformColor } = req.body;
-    const updates: Partial<{ name: string; tileData: string; bgColor: string; groundColor: string; platformColor: string; updatedAt: Date }> = { updatedAt: new Date() };
+    const { name, tileData, bgColor, groundColor, platformColor, isPublic } = req.body;
+    const updates: Partial<{ name: string; tileData: string; bgColor: string; groundColor: string; platformColor: string; isPublic: boolean; updatedAt: Date }> = { updatedAt: new Date() };
 
     if (name !== undefined) {
       if (typeof name !== "string" || name.length < 1 || name.length > 50) {
@@ -225,6 +241,9 @@ router.put("/user/maps/:id", authRequired, async (req, res) => {
       }
       updates.platformColor = platformColor;
     }
+    if (isPublic !== undefined) {
+      updates.isPublic = isPublic === true;
+    }
 
     await db.update(customMapsTable).set(updates)
       .where(and(eq(customMapsTable.id, mapId), eq(customMapsTable.userId, userId)));
@@ -258,6 +277,171 @@ router.delete("/user/maps/:id", authRequired, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Delete map error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.get("/maps/gallery", optionalAuth, async (req, res) => {
+  try {
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+
+    const likeCountSq = db
+      .select({
+        mapId: mapLikesTable.mapId,
+        likeCount: count(mapLikesTable.id).as("like_count"),
+      })
+      .from(mapLikesTable)
+      .groupBy(mapLikesTable.mapId)
+      .as("like_counts");
+
+    const predicate = search.length > 0
+      ? and(
+          eq(customMapsTable.isPublic, true),
+          or(
+            ilike(customMapsTable.name, `%${search}%`),
+            ilike(usersTable.username, `%${search}%`)
+          )
+        )
+      : eq(customMapsTable.isPublic, true);
+
+    const maps = await db
+      .select({
+        id: customMapsTable.id,
+        name: customMapsTable.name,
+        bgColor: customMapsTable.bgColor,
+        groundColor: customMapsTable.groundColor,
+        platformColor: customMapsTable.platformColor,
+        createdAt: customMapsTable.createdAt,
+        updatedAt: customMapsTable.updatedAt,
+        creatorUsername: usersTable.username,
+        likeCount: sql<number>`coalesce(${likeCountSq.likeCount}, 0)`,
+      })
+      .from(customMapsTable)
+      .innerJoin(usersTable, eq(customMapsTable.userId, usersTable.id))
+      .leftJoin(likeCountSq, eq(customMapsTable.id, likeCountSq.mapId))
+      .where(predicate)
+      .orderBy(
+        desc(sql`coalesce(${likeCountSq.likeCount}, 0)`),
+        desc(customMapsTable.updatedAt)
+      )
+      .limit(100);
+
+    let likedMapIds: Set<number> = new Set();
+    if (req.user) {
+      const likes = await db
+        .select({ mapId: mapLikesTable.mapId })
+        .from(mapLikesTable)
+        .where(eq(mapLikesTable.userId, req.user.userId));
+      likedMapIds = new Set(likes.map(l => l.mapId));
+    }
+
+    const result = maps.map(m => ({
+      ...m,
+      likeCount: Number(m.likeCount),
+      likedByMe: likedMapIds.has(m.id),
+    }));
+
+    res.json({ maps: result });
+  } catch (err) {
+    console.error("Gallery error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.get("/maps/public/:id", optionalAuth, async (req, res) => {
+  try {
+    const rawId = typeof req.params.id === "string" ? req.params.id : "";
+    const mapId = parseInt(rawId, 10);
+    if (isNaN(mapId)) {
+      res.status(400).json({ error: "Invalid map ID" });
+      return;
+    }
+
+    const [map] = await db.select().from(customMapsTable)
+      .where(and(eq(customMapsTable.id, mapId), eq(customMapsTable.isPublic, true)))
+      .limit(1);
+
+    if (!map) {
+      res.status(404).json({ error: "Map not found or not public" });
+      return;
+    }
+
+    res.json({ map });
+  } catch (err) {
+    console.error("Get public map error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.post("/maps/:id/like", authRequired, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const rawId = typeof req.params.id === "string" ? req.params.id : "";
+    const mapId = parseInt(rawId, 10);
+    if (isNaN(mapId)) {
+      res.status(400).json({ error: "Invalid map ID" });
+      return;
+    }
+
+    const [map] = await db.select({ id: customMapsTable.id })
+      .from(customMapsTable)
+      .where(and(eq(customMapsTable.id, mapId), eq(customMapsTable.isPublic, true)))
+      .limit(1);
+
+    if (!map) {
+      res.status(404).json({ error: "Map not found or not public" });
+      return;
+    }
+
+    try {
+      await db.insert(mapLikesTable).values({ userId, mapId });
+    } catch {
+      // unique constraint violation means already liked, that's fine
+    }
+
+    const [{ likeCount }] = await db
+      .select({ likeCount: count(mapLikesTable.id) })
+      .from(mapLikesTable)
+      .where(eq(mapLikesTable.mapId, mapId));
+
+    res.json({ likeCount: Number(likeCount), likedByMe: true });
+  } catch (err) {
+    console.error("Like map error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.delete("/maps/:id/like", authRequired, async (req, res) => {
+  try {
+    const userId = req.user!.userId;
+    const rawId = typeof req.params.id === "string" ? req.params.id : "";
+    const mapId = parseInt(rawId, 10);
+    if (isNaN(mapId)) {
+      res.status(400).json({ error: "Invalid map ID" });
+      return;
+    }
+
+    const [map] = await db.select({ id: customMapsTable.id })
+      .from(customMapsTable)
+      .where(and(eq(customMapsTable.id, mapId), eq(customMapsTable.isPublic, true)))
+      .limit(1);
+
+    if (!map) {
+      res.status(404).json({ error: "Map not found or not public" });
+      return;
+    }
+
+    await db.delete(mapLikesTable)
+      .where(and(eq(mapLikesTable.userId, userId), eq(mapLikesTable.mapId, mapId)));
+
+    const [{ likeCount }] = await db
+      .select({ likeCount: count(mapLikesTable.id) })
+      .from(mapLikesTable)
+      .where(eq(mapLikesTable.mapId, mapId));
+
+    res.json({ likeCount: Number(likeCount), likedByMe: false });
+  } catch (err) {
+    console.error("Unlike map error:", err);
     res.status(500).json({ error: "Server error" });
   }
 });

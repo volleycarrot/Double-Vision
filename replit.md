@@ -62,12 +62,24 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 
 ### Custom Map Builder
 - "Create Map" button on TitleScene (disabled for guests with "log in" message)
-- "My Maps" button opens a modal listing saved maps with play/edit/delete actions
+- "My Maps" button opens a modal listing saved maps with play/edit/delete actions and public/private toggle per map
 - MapEditorScene: scrollable grid editor (200×15 tiles at 32px), tile palette toolbar, background/ground/platform color pickers
 - Custom maps saved to server via REST API, stored as JSON tile data
 - Playable in all modes (single, local co-op, online co-op)
 - For online co-op, custom tile data is sent to partner via WebSocket
 - Maps use same LevelTile format as procedural levels
+- Maps default to Private; owner can toggle Public/Private at any time from My Maps modal
+
+### Community Gallery
+- "Browse Maps" button on TitleScene (visible to all including guests)
+- BrowseMapScene: gallery of all public maps with map name, creator username, like count, like button, play button
+- Search box filters by map name or creator username (case-insensitive)
+- Sorted by like count (desc), then most recent
+- Logged-in players can like/unlike public maps (one like per map, persisted to server)
+- Optimistic like UI with rollback on error
+- Guests can browse and play public maps; like button shows hint to log in
+- Play loads map tile data and starts a normal game session
+- Empty state shown when no public maps exist or no search results
 
 ### Key Files
 - `src/main.ts` - Phaser config and game initialization
@@ -106,11 +118,15 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - POST `/api/user/progress` - Update world progress
 - POST `/api/user/accessories` - Update owned/equipped accessories
 - POST `/api/user/stats` - Update all-time stats
-- GET `/api/user/maps` - List user's custom maps
-- GET `/api/user/maps/:id` - Get a specific custom map with tile data
-- POST `/api/user/maps` - Create a new custom map
-- PUT `/api/user/maps/:id` - Update an existing custom map
+- GET `/api/user/maps` - List user's custom maps (includes isPublic flag)
+- GET `/api/user/maps/:id` - Get a specific custom map with tile data (owner only)
+- POST `/api/user/maps` - Create a new custom map (isPublic optional, defaults false)
+- PUT `/api/user/maps/:id` - Update an existing custom map (supports isPublic toggle)
 - DELETE `/api/user/maps/:id` - Delete a custom map
+- GET `/api/maps/gallery` - List all public maps (search query param for name/creator, sorted by likes desc)
+- GET `/api/maps/public/:id` - Get tile data for a public map (no auth required)
+- POST `/api/maps/:id/like` - Like a public map (auth required)
+- DELETE `/api/maps/:id/like` - Unlike a public map (auth required)
 - Auth middleware extracts user from Bearer token in Authorization header
 - Dependencies: bcryptjs, jsonwebtoken
 
@@ -118,7 +134,8 @@ A 2-player co-op 2D platformer built with Phaser 3 (v3.90). Located in `artifact
 - `users` table: id, username, password_hash, coins, created_at, updated_at
 - `user_progress` table: id, user_id, world_index, completed, deaths (unique on user_id + world_index)
 - `user_accessories` table: id, user_id, accessory_id, equipped (unique on user_id + accessory_id)
-- `custom_maps` table: id, user_id, name, tile_data (JSON), bg_color, ground_color, platform_color, created_at, updated_at
+- `custom_maps` table: id, user_id, name, tile_data (JSON), bg_color, ground_color, platform_color, is_public (default false), created_at, updated_at
+- `map_likes` table: id, user_id, map_id, created_at (unique on user_id + map_id, cascade delete on map)
 
 ### WebSocket Room Management
 - WebSocket server attached to HTTP server at `/api/ws`

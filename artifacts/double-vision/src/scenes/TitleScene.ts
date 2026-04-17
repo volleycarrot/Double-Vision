@@ -30,7 +30,7 @@ export class TitleScene extends Phaser.Scene {
   private myMapsModalBg: Phaser.GameObjects.Rectangle | null = null;
   private myMapsDynamicObjects: Phaser.GameObjects.GameObject[] = [];
   private myMapsPage = 0;
-  private myMapsData: { id: number; name: string; tileData: string; bgColor: string; groundColor: string; platformColor: string }[] = [];
+  private myMapsData: { id: number; name: string; tileData: string; bgColor: string; groundColor: string; platformColor: string; isPublic: boolean }[] = [];
 
   constructor() {
     super({ key: "TitleScene" });
@@ -325,6 +325,7 @@ export class TitleScene extends Phaser.Scene {
           this.showError("Log in to view your maps");
         });
       }
+
     }
 
     const enterKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
@@ -380,6 +381,7 @@ export class TitleScene extends Phaser.Scene {
 
     this.addSettingsButton(leftCenterX, height);
     this.addShopButton(leftCenterX, height);
+    this.addBrowseMapsButton(leftCenterX, height);
     this.addStatsButton(leftCenterX, height);
 
     const playerName = getUsername();
@@ -625,6 +627,41 @@ export class TitleScene extends Phaser.Scene {
     });
   }
 
+  private addBrowseMapsButton(leftCenterX: number, height: number) {
+    const btnWidth = 110;
+    const btnHeight = 36;
+    const browseX = leftCenterX + btnWidth + 8;
+    const browseY = height * 0.32;
+
+    const browseBg = this.add.rectangle(browseX, browseY, btnWidth, btnHeight, 0x0a1a33, 0.9);
+    browseBg.setStrokeStyle(2, 0x4488ff);
+    browseBg.setInteractive({ useHandCursor: true });
+
+    this.add.text(browseX - 32, browseY, "🌐", {
+      fontSize: "16px",
+    }).setOrigin(0.5);
+
+    const browseLabel = this.add.text(browseX + 6, browseY, "Browse", {
+      fontSize: "14px",
+      fontFamily: "Arial, sans-serif",
+      color: "#88bbff",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+
+    browseBg.on("pointerover", () => {
+      browseBg.setFillStyle(0x1e2d4a, 1);
+      browseLabel.setColor("#ffffff");
+    });
+    browseBg.on("pointerout", () => {
+      browseBg.setFillStyle(0x0a1a33, 0.9);
+      browseLabel.setColor("#88bbff");
+    });
+    browseBg.on("pointerdown", () => {
+      if (this.settingsOpen || this.myMapsOpen) return;
+      this.scene.start("BrowseMapScene", { gameMode: this.gameMode });
+    });
+  }
+
   private addStatsButton(_leftCenterX: number, _height: number) {
     const { width } = this.scale;
     const statsX = width - 38;
@@ -820,12 +857,42 @@ export class TitleScene extends Phaser.Scene {
       rowBg.setStrokeStyle(1, 0x0f3460);
       this.myMapsDynamicObjects.push(rowBg);
 
-      const nameText = this.add.text(modalX - modalW / 2 + 30, ry + rowH / 2, map.name, {
-        fontSize: "13px",
+      const nameText = this.add.text(modalX - modalW / 2 + 30, ry + 8, map.name, {
+        fontSize: "12px",
         fontFamily: "monospace",
         color: "#cccccc",
-      }).setOrigin(0, 0.5);
+      }).setOrigin(0, 0);
       this.myMapsDynamicObjects.push(nameText);
+
+      const pubColor = map.isPublic ? "#44cc88" : "#666688";
+      const pubLabel = map.isPublic ? "🌐 Public" : "🔒 Private";
+      const pubToggle = this.add.text(modalX - modalW / 2 + 30, ry + 24, pubLabel, {
+        fontSize: "9px",
+        fontFamily: "monospace",
+        color: pubColor,
+      }).setOrigin(0, 0).setInteractive({ useHandCursor: true });
+      this.myMapsDynamicObjects.push(pubToggle);
+
+      pubToggle.on("pointerover", () => pubToggle.setColor("#ffffff"));
+      pubToggle.on("pointerout", () => pubToggle.setColor(map.isPublic ? "#44cc88" : "#666688"));
+      pubToggle.on("pointerdown", async () => {
+        const newPublic = !map.isPublic;
+        const confirmMsg = newPublic
+          ? `Make "${map.name}" public? Anyone can browse and play it.`
+          : `Make "${map.name}" private? It will be removed from the gallery.`;
+        if (!window.confirm(confirmMsg)) return;
+        try {
+          const res = await apiRequest(`/user/maps/${map.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ isPublic: newPublic }),
+          });
+          if (res.ok) {
+            map.isPublic = newPublic;
+            pubToggle.setText(newPublic ? "🌐 Public" : "🔒 Private");
+            pubToggle.setColor(newPublic ? "#44cc88" : "#666688");
+          }
+        } catch {}
+      });
 
       const playBtn = this.add.text(modalX + modalW / 2 - 40, ry + rowH / 2 - 8, "▶", {
         fontSize: "16px",

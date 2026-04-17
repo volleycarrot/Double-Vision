@@ -47,9 +47,19 @@ export const customMapsTable = pgTable("custom_maps", {
   bgColor: text("bg_color").notNull().default("#1a1a2e"),
   groundColor: text("ground_color").notNull().default("#3a3a3a"),
   platformColor: text("platform_color").notNull().default("#4a4a4a"),
+  isPublic: boolean("is_public").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const mapLikesTable = pgTable("map_likes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id),
+  mapId: integer("map_id").notNull().references(() => customMapsTable.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("map_likes_user_map_idx").on(table.userId, table.mapId),
+]);
 
 export type User = typeof usersTable.$inferSelect;
 export type InsertUser = typeof usersTable.$inferInsert;
@@ -57,3 +67,4 @@ export type UserProgress = typeof userProgressTable.$inferSelect;
 export type UserAccessory = typeof userAccessoriesTable.$inferSelect;
 export type UserStats = typeof userStatsTable.$inferSelect;
 export type CustomMap = typeof customMapsTable.$inferSelect;
+export type MapLike = typeof mapLikesTable.$inferSelect;
