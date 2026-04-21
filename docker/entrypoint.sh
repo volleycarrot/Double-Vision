@@ -59,17 +59,44 @@ start_postgres() {
 # ============================================================
 # 2. Install dependencies if missing or stale
 # ============================================================
+# Detect the rollup native binary required for this container's arch.
+# Used to decide when a stale node_modules volume needs to be re-resolved.
+rollup_native_pkg() {
+  case "$(uname -m)" in
+    aarch64|arm64) echo "@rollup/rollup-linux-arm64-gnu" ;;
+    x86_64)        echo "@rollup/rollup-linux-x64-gnu" ;;
+    *)             echo "" ;;
+  esac
+}
+
+needs_fresh_install() {
+  # Fresh volume: nothing installed yet.
+  [ ! -d node_modules/.pnpm ] && return 0
+
+  # Stale volume: native binary for this arch is missing (e.g. volume was
+  # populated on a different host arch, or pnpm-workspace.yaml overrides
+  # stripped it before).
+  local pkg
+  pkg="$(rollup_native_pkg)"
+  if [ -n "$pkg" ] && [ ! -d "node_modules/$pkg" ]; then
+    return 0
+  fi
+
+  return 1
+}
+
 install_deps() {
   sudo chown "$(id -u):$(id -g)" /workspace/node_modules 2>/dev/null || true
 
   cd /workspace
 
   # pnpm-workspace.yaml has overrides that exclude all platform-specific native
-  # binaries except linux-x64 (Replit's arch). Strip the overrides so pnpm
+  # binaries except linux-x64 (Replit's arch). When installing on a different
+  # arch (e.g. arm64 under Docker on Apple Silicon), strip the overrides so pnpm
   # resolves for this container's architecture. Originals are restored after
   # install to avoid dirtying the bind-mounted source tree.
-  if [ ! -d node_modules/.pnpm ]; then
-    echo "Installing dependencies (fresh)..."
+  if needs_fresh_install; then
+    echo "Installing dependencies (fresh, stripping platform overrides)..."
     cp pnpm-workspace.yaml /tmp/pnpm-workspace-original.yaml
     cp pnpm-lock.yaml /tmp/pnpm-lock-original.yaml
 
@@ -94,7 +121,7 @@ for line in text.splitlines():
         lines.append(line)
 open('pnpm-workspace.yaml','w').write('\n'.join(lines)+'\n')
 "
-    rm pnpm-lock.yaml
+    rm -f pnpm-lock.yaml
     pnpm install --no-frozen-lockfile
 
     cp /tmp/pnpm-workspace-original.yaml pnpm-workspace.yaml
