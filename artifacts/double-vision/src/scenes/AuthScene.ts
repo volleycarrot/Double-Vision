@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { getBgColor, setInputMode, type InputMode } from "../GameSettings";
-import { loginRequest, registerRequest, isLoggedIn, loadUserData } from "../AuthManager";
+import { loginRequest, registerRequest, isLoggedIn, loadUserData, broadcastAuthChange } from "../AuthManager";
 import { loadServerData as loadServerCoins } from "../CoinManager";
 import { loadServerData as loadServerProgress } from "../ProgressManager";
 import { loadServerData as loadServerAccessories } from "../AccessoryManager";
@@ -176,7 +176,7 @@ export class AuthScene extends Phaser.Scene {
 
     if (mode === "register") {
       const usernameHint = document.createElement("div");
-      usernameHint.textContent = "3-15 characters: letters, numbers, underscores";
+      usernameHint.textContent = "3-15 characters";
       usernameHint.style.color = "#666688";
       usernameHint.style.fontFamily = "monospace";
       usernameHint.style.fontSize = `${10 * scaleY}px`;
@@ -199,7 +199,7 @@ export class AuthScene extends Phaser.Scene {
 
     if (mode === "register") {
       const passwordHint = document.createElement("div");
-      passwordHint.textContent = "At least 7 characters: letters, numbers, underscores";
+      passwordHint.textContent = "At least 7 characters";
       passwordHint.style.color = "#666688";
       passwordHint.style.fontFamily = "monospace";
       passwordHint.style.fontSize = `${10 * scaleY}px`;
@@ -319,16 +319,8 @@ export class AuthScene extends Phaser.Scene {
         this.showError("Username must be at most 15 characters");
         return;
       }
-      if (!/^[a-zA-Z0-9_]+$/.test(usr)) {
-        this.showError("Username can only contain letters, numbers, and underscores");
-        return;
-      }
       if (pwd.length < 7) {
         this.showError("Password must be at least 7 characters");
-        return;
-      }
-      if (!/^[a-zA-Z0-9_]+$/.test(pwd)) {
-        this.showError("Password can only contain letters, numbers, and underscores");
         return;
       }
     }
@@ -354,14 +346,22 @@ export class AuthScene extends Phaser.Scene {
     try {
       const data = await loadUserData();
       if (data) {
+        // Hydration order matters for checkSpecialUnlocks() correctness.
+        // Two paths invoke it during hydration:
+        //   1. loadServerProgress → emitProgressChange → onProgressChange → checkSpecialUnlocks
+        //   2. loadServerAccessories calls checkSpecialUnlocks directly
+        // checkSpecialUnlocks reads both getStats() and state.ownedSpecials, so
+        // stats and accessories must both reflect the new account before progress
+        // is loaded. Load order: coins (independent), stats, accessories, progress.
         loadServerCoins(data.coins);
-        loadServerProgress(data.progress);
+        loadServerStats(data.stats ?? {});
         loadServerAccessories(data.accessories);
-        if (data.stats) {
-          loadServerStats(data.stats);
-        }
+        loadServerProgress(data.progress);
       }
     } catch {}
+    // Notify managers to reload their in-memory state from the account
+    // namespace, which now contains the fully merged data.
+    broadcastAuthChange();
     this.scene.start("InputModeSelectScene");
   }
 

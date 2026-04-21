@@ -1,8 +1,6 @@
 import { WORLDS } from "./worlds/WorldConfig";
-import { isLoggedIn, syncProgress } from "./AuthManager";
+import { isLoggedIn, syncProgress, getStorageKey } from "./AuthManager";
 import { emitProgressChange } from "./EventBus";
-
-const STORAGE_KEY = "double-vision-progress";
 
 export interface WorldProgress {
   completed: boolean;
@@ -22,7 +20,7 @@ function defaultProgress(): GameProgress {
 
 export function loadProgress(): GameProgress {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey("progress"));
     if (!raw) return defaultProgress();
     const parsed = JSON.parse(raw) as GameProgress;
     if (!parsed.worlds || parsed.worlds.length !== WORLDS.length) {
@@ -39,7 +37,7 @@ export function loadProgress(): GameProgress {
 
 export function saveProgress(progress: GameProgress): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    localStorage.setItem(getStorageKey("progress"), JSON.stringify(progress));
   } catch {}
 }
 

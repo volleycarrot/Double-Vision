@@ -4,6 +4,26 @@ const USERNAME_KEY = "double-vision-auth-username";
 let token: string | null = null;
 let username: string | null = null;
 
+type AuthChangeCallback = () => void;
+const authChangeListeners: AuthChangeCallback[] = [];
+
+export function onAuthChange(cb: AuthChangeCallback): void {
+  authChangeListeners.push(cb);
+}
+
+/**
+ * Broadcast an auth namespace change to all registered managers so they
+ * reload their in-memory state from the now-active storage namespace.
+ *
+ * On LOGIN: call this AFTER loadServerData() has already written merged
+ * data to the account-scoped keys, so managers reload the correct values.
+ *
+ * On LOGOUT: called automatically inside logout().
+ */
+export function broadcastAuthChange(): void {
+  authChangeListeners.forEach(cb => cb());
+}
+
 function loadFromStorage(): void {
   try {
     token = localStorage.getItem(TOKEN_KEY);
@@ -28,6 +48,18 @@ export function getToken(): string | null {
   return token;
 }
 
+/**
+ * Returns a namespaced localStorage key.
+ * Guests use the original flat key (e.g. "double-vision-coins") for backward compatibility.
+ * Logged-in accounts use a per-username key (e.g. "double-vision-user-alice-coins").
+ */
+export function getStorageKey(base: string): string {
+  if (isLoggedIn() && username) {
+    return `double-vision-user-${username}-${base}`;
+  }
+  return `double-vision-${base}`;
+}
+
 export function setAuth(newToken: string, newUsername: string): void {
   token = newToken;
   username = newUsername;
@@ -35,15 +67,37 @@ export function setAuth(newToken: string, newUsername: string): void {
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(USERNAME_KEY, newUsername);
   } catch {}
+  // Do NOT notify here — callers must call broadcastAuthChange() themselves
+  // after server data has been loaded into the account namespace, so that
+  // managers reload the fully-merged state rather than an empty namespace.
 }
 
 export function logout(): void {
+  // Clear account-scoped local save keys before nulling username
+  if (username) {
+    for (const base of ["coins", "progress", "stats", "accessories"]) {
+      try {
+        localStorage.removeItem(`double-vision-user-${username}-${base}`);
+      } catch {}
+    }
+  }
   token = null;
   username = null;
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USERNAME_KEY);
   } catch {}
+  // Clear the shared guest-namespace save keys so the next guest session
+  // (or the next logged-in session before server data is loaded) always
+  // starts from a true zero state instead of the previous account's leftovers.
+  for (const base of ["coins", "progress", "stats", "accessories"]) {
+    try {
+      localStorage.removeItem(`double-vision-${base}`);
+    } catch {}
+  }
+  // Notify immediately on logout so managers reload from the now-cleared
+  // guest namespace and reflect a clean default state without a page refresh.
+  broadcastAuthChange();
 }
 
 function getApiBase(): string {

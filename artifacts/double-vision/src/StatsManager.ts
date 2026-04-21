@@ -1,7 +1,5 @@
-import { isLoggedIn, syncStats } from "./AuthManager";
+import { isLoggedIn, syncStats, getStorageKey, onAuthChange } from "./AuthManager";
 import { emitProgressChange } from "./EventBus";
-
-const STORAGE_KEY = "double-vision-stats";
 
 export interface AllTimeStats {
   totalCoinsEarned: number;
@@ -23,9 +21,14 @@ function defaultStats(): AllTimeStats {
 
 let stats: AllTimeStats = loadStats();
 
+onAuthChange(() => {
+  stats = loadStats();
+  emitProgressChange();
+});
+
 function loadStats(): AllTimeStats {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey("stats"));
     if (!raw) return defaultStats();
     const parsed = JSON.parse(raw);
     const result = defaultStats();
@@ -47,7 +50,7 @@ function loadStats(): AllTimeStats {
 
 function save(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+    localStorage.setItem(getStorageKey("stats"), JSON.stringify(stats));
   } catch {}
   if (isLoggedIn()) {
     syncStats(stats);
@@ -87,23 +90,14 @@ export function recordLevelCreated(): void {
 }
 
 export function loadServerData(serverStats: Partial<AllTimeStats>): void {
-  const merged = defaultStats();
-  merged.totalCoinsEarned = Math.max(stats.totalCoinsEarned, serverStats.totalCoinsEarned ?? 0);
-  merged.totalCoinsSpent = Math.max(stats.totalCoinsSpent, serverStats.totalCoinsSpent ?? 0);
-  merged.totalDeaths = Math.max(stats.totalDeaths, serverStats.totalDeaths ?? 0);
-  merged.totalLevelCompletions = Math.max(stats.totalLevelCompletions, serverStats.totalLevelCompletions ?? 0);
-  merged.totalLevelsCreated = Math.max(stats.totalLevelsCreated, serverStats.totalLevelsCreated ?? 0);
-  stats = merged;
+  const replaced = defaultStats();
+  replaced.totalCoinsEarned = serverStats.totalCoinsEarned ?? 0;
+  replaced.totalCoinsSpent = serverStats.totalCoinsSpent ?? 0;
+  replaced.totalDeaths = serverStats.totalDeaths ?? 0;
+  replaced.totalLevelCompletions = serverStats.totalLevelCompletions ?? 0;
+  replaced.totalLevelsCreated = serverStats.totalLevelsCreated ?? 0;
+  stats = replaced;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+    localStorage.setItem(getStorageKey("stats"), JSON.stringify(stats));
   } catch {}
-  const localExceedsServer =
-    merged.totalCoinsEarned > (serverStats.totalCoinsEarned ?? 0) ||
-    merged.totalCoinsSpent > (serverStats.totalCoinsSpent ?? 0) ||
-    merged.totalDeaths > (serverStats.totalDeaths ?? 0) ||
-    merged.totalLevelCompletions > (serverStats.totalLevelCompletions ?? 0) ||
-    merged.totalLevelsCreated > (serverStats.totalLevelsCreated ?? 0);
-  if (localExceedsServer && isLoggedIn()) {
-    syncStats(stats);
-  }
 }

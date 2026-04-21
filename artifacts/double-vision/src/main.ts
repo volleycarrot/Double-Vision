@@ -10,6 +10,7 @@ import { GameScene } from "./scenes/GameScene";
 import { WinScene } from "./scenes/WinScene";
 import { InputModeSelectScene } from "./scenes/InputModeSelectScene";
 import { MapEditorScene } from "./scenes/MapEditorScene";
+import { BrowseMapScene } from "./scenes/BrowseMapScene";
 
 const basePath = (import.meta as any).env?.BASE_URL || "/";
 
@@ -46,6 +47,7 @@ const config: Phaser.Types.Core.GameConfig = {
     GameScene,
     WinScene,
     MapEditorScene,
+    BrowseMapScene,
   ],
 };
 

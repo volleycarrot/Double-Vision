@@ -1,14 +1,17 @@
-import { isLoggedIn, syncCoins } from "./AuthManager";
+import { isLoggedIn, syncCoins, getStorageKey, onAuthChange } from "./AuthManager";
 import { recordCoinsEarned, recordCoinsSpent } from "./StatsManager";
 import { emitProgressChange } from "./EventBus";
 
-const STORAGE_KEY = "double-vision-coins";
-
 let coinBalance = loadBalance();
+
+onAuthChange(() => {
+  coinBalance = loadBalance();
+  emitProgressChange();
+});
 
 function loadBalance(): number {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey("coins"));
     if (!raw) return 0;
     const val = JSON.parse(raw);
     return typeof val === "number" && val >= 0 ? Math.floor(val) : 0;
@@ -19,7 +22,7 @@ function loadBalance(): number {
 
 function save(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(coinBalance));
+    localStorage.setItem(getStorageKey("coins"), JSON.stringify(coinBalance));
   } catch {}
   if (isLoggedIn()) {
     syncCoins(coinBalance);
@@ -50,6 +53,6 @@ export function spendCoins(amount: number): boolean {
 export function loadServerData(serverCoins: number): void {
   coinBalance = serverCoins;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(coinBalance));
+    localStorage.setItem(getStorageKey("coins"), JSON.stringify(coinBalance));
   } catch {}
 }

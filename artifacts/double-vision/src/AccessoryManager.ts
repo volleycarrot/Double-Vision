@@ -1,12 +1,11 @@
 import Phaser from "phaser";
 import { EYE, getEyeOffsetY } from "./PlayerConfig";
-import { isLoggedIn, syncAccessories } from "./AuthManager";
+import { isLoggedIn, syncAccessories, getStorageKey, onAuthChange } from "./AuthManager";
 import { getStats } from "./StatsManager";
 import { deathlessWorldCount, allWorldsDeathless } from "./ProgressManager";
 import { onProgressChange, dispatchSpecialUnlocked } from "./EventBus";
 import { WORLDS } from "./worlds/WorldConfig";
 
-const STORAGE_KEY = "double-vision-accessories";
 const SPECIAL_PREFIX = "special:";
 
 export interface Accessory {
@@ -211,14 +210,9 @@ function migrateState(s: AccessoryState): AccessoryState {
   return s;
 }
 
-let state: AccessoryState = migrateState(loadState());
-try {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-} catch {}
-
 function loadState(): AccessoryState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey("accessories"));
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw) as Partial<AccessoryState>;
     const base = defaultState();
@@ -238,9 +232,22 @@ function loadState(): AccessoryState {
   }
 }
 
+let state: AccessoryState = migrateState(loadState());
+try {
+  localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
+} catch {}
+
+onAuthChange(() => {
+  state = migrateState(loadState());
+  try {
+    localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
+  } catch {}
+  checkSpecialUnlocks();
+});
+
 function save(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
   } catch {}
   if (isLoggedIn()) {
     const equippedMap: Record<string, boolean> = {};
@@ -426,39 +433,39 @@ onProgressChange(() => {
 checkSpecialUnlocks();
 
 export function loadServerData(serverAccessories: Array<{ accessoryId: string; equipped: boolean }>): void {
-  const mergedOwned = new Set<string>(state.owned);
-  const mergedSpecials = new Set<string>(state.ownedSpecials);
-  const mergedEquipped: Record<string, string | null> = { ...state.equipped };
-  let mergedEquippedSpecial: string | null = state.equippedSpecial;
+  const replacedOwned = new Set<string>();
+  const replacedSpecials = new Set<string>();
+  const replacedEquipped: Record<string, string | null> = { hat: null, glasses: null, neckwear: null };
+  let replacedEquippedSpecial: string | null = null;
 
   for (const sa of serverAccessories) {
     if (sa.accessoryId.startsWith(SPECIAL_PREFIX)) {
       const sid = sa.accessoryId.slice(SPECIAL_PREFIX.length);
       if (SPECIALS.some(s => s.id === sid)) {
-        mergedSpecials.add(sid);
-        if (sa.equipped) mergedEquippedSpecial = sid;
+        replacedSpecials.add(sid);
+        if (sa.equipped) replacedEquippedSpecial = sid;
       }
       continue;
     }
     const remappedId = sa.accessoryId === "halo" ? "glowring" : sa.accessoryId;
-    mergedOwned.add(remappedId);
+    replacedOwned.add(remappedId);
     if (sa.equipped) {
       const acc = ACCESSORIES.find(a => a.id === remappedId);
       if (acc) {
-        mergedEquipped[acc.category] = remappedId;
+        replacedEquipped[acc.category] = remappedId;
       }
     }
   }
 
   state = {
     ...state,
-    owned: [...mergedOwned],
-    equipped: mergedEquipped,
-    ownedSpecials: [...mergedSpecials],
-    equippedSpecial: mergedEquippedSpecial,
+    owned: [...replacedOwned],
+    equipped: replacedEquipped,
+    ownedSpecials: [...replacedSpecials],
+    equippedSpecial: replacedEquippedSpecial,
   };
-  if (mergedEquippedSpecial) {
-    const sp = SPECIALS.find(s => s.id === mergedEquippedSpecial);
+  if (replacedEquippedSpecial) {
+    const sp = SPECIALS.find(s => s.id === replacedEquippedSpecial);
     if (sp) {
       for (const slot of sp.slots) {
         state.equipped[slot] = null;
@@ -466,7 +473,7 @@ export function loadServerData(serverAccessories: Array<{ accessoryId: string; e
     }
   }
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(getStorageKey("accessories"), JSON.stringify(state));
   } catch {}
 
   save();

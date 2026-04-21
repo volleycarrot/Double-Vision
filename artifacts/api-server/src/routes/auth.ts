@@ -40,20 +40,12 @@ router.post("/auth/register", async (req, res) => {
       res.status(400).json({ error: "Username must be at most 15 characters" });
       return;
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      res.status(400).json({ error: "Username can only contain letters, numbers, and underscores" });
-      return;
-    }
     if (typeof password !== "string") {
       res.status(400).json({ error: "Password must be a string" });
       return;
     }
     if (password.length < 7) {
       res.status(400).json({ error: "Password must be at least 7 characters" });
-      return;
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(password)) {
-      res.status(400).json({ error: "Password can only contain letters, numbers, and underscores" });
       return;
     }
     if (isInappropriateUsername(username)) {
